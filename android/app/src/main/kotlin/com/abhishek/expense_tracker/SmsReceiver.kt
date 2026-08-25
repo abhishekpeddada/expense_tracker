@@ -26,6 +26,10 @@ class SmsReceiver : BroadcastReceiver() {
         val entryId = UUID.randomUUID().toString()
 
         val preview = if (body.length > 60) body.take(60) + "…" else body
+        if (!runCatching { SmsQueue.markSeen(context, sender, body, ts) }
+                .getOrDefault(true)) {
+            return // already handled via SMS_RECEIVED
+        }
         runCatching {
             SmsQueue.add(context, entryId, sender, body, ts)
             SmsQueue.log(context, "received from $sender: $preview")

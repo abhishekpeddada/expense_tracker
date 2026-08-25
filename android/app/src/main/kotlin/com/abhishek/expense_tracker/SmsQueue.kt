@@ -15,6 +15,8 @@ object SmsQueue {
     private const val KEY_PENDING = "pending_categories"
     private const val KEY_LOG = "receive_log"
     private const val LOG_MAX = 50
+    private const val KEY_SEEN = "seen_keys"
+    private const val SEEN_MAX = 40
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -70,6 +72,26 @@ object SmsQueue {
         val obj = JSONObject(prefs(ctx).getString(KEY_PENDING, "{}"))
         obj.remove(entryId)
         prefs(ctx).edit().putString(KEY_PENDING, obj.toString()).apply()
+    }
+
+    /**
+     * Records a message as handled, returning true only the first time.
+     * SMS_DELIVER and SMS_RECEIVED both fire while we are the default app,
+     * so whichever arrives first wins and the other is ignored.
+     */
+    @Synchronized
+    fun markSeen(ctx: Context, sender: String, body: String, ts: Long): Boolean {
+        val key = "$sender|$ts|${body.hashCode()}"
+        val arr = JSONArray(prefs(ctx).getString(KEY_SEEN, "[]"))
+        for (i in 0 until arr.length()) {
+            if (arr.getString(i) == key) return false
+        }
+        arr.put(key)
+        val trimmed = JSONArray()
+        val start = maxOf(0, arr.length() - SEEN_MAX)
+        for (i in start until arr.length()) trimmed.put(arr.getString(i))
+        prefs(ctx).edit().putString(KEY_SEEN, trimmed.toString()).apply()
+        return true
     }
 
     /**

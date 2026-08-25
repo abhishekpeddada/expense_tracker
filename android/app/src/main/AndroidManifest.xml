@@ -55,6 +55,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Backup path: SMS_RECEIVED reaches every app holding
+             RECEIVE_SMS, not just the default SMS app, so a message is
+             still captured if SMS_DELIVER does not arrive. Duplicates are
+             filtered by SmsQueue.markSeen. -->
+        <receiver
+            android:name=".SmsFallbackReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Default-SMS-app requirement: MMS via WAP push. We ack it but do
              not download MMS content yet. -->
         <receiver
