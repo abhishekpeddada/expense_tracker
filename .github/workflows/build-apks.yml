@@ -26,6 +26,27 @@ jobs:
           flutter-version: "3.47.1"
           cache: true
 
+      # Signing: set repo secrets KEYSTORE_BASE64 and KEYSTORE_PASSWORD to
+      # sign with the release keystore. Without them, builds fall back to
+      # debug signing (Play Protect will flag those).
+      - name: Materialize signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            {
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyPassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=expense"
+              echo "storeFile=upload-keystore.jks"
+            } > android/key.properties
+            echo "Release signing enabled."
+          else
+            echo "::warning::No signing secrets set - falling back to debug signing."
+          fi
+
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
