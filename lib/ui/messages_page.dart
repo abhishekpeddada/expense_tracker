@@ -14,7 +14,9 @@ class _Conversation {
   final SmsMessage last;
   final int count;
   final bool hasTransaction;
-  const _Conversation(this.sender, this.last, this.count, this.hasTransaction);
+  final int unread;
+  const _Conversation(
+      this.sender, this.last, this.count, this.hasTransaction, this.unread);
 }
 
 /// SMS inbox grouped into one conversation per sender.
@@ -68,6 +70,7 @@ class MessagesPage extends ConsumerWidget {
               e.value.first,
               e.value.length,
               e.value.any((m) => m.isTransaction),
+              e.value.where((m) => !m.read && !m.outgoing).length,
             ),
         ];
 
@@ -114,6 +117,8 @@ class _ConversationTile extends ConsumerWidget {
     final c = conversation;
     final name =
         ref.watch(contactNameProvider(c.sender)).valueOrNull ?? c.sender;
+    final hasUnread = c.unread > 0;
+    final scheme = Theme.of(context).colorScheme;
 
     return ListTile(
       leading: CircleAvatar(
@@ -125,10 +130,15 @@ class _ConversationTile extends ConsumerWidget {
           Expanded(
             child: Text(name,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontWeight:
+                        hasUnread ? FontWeight.w800 : FontWeight.w600)),
           ),
           Text(_dateFmt.format(c.last.receivedAt),
-              style: Theme.of(context).textTheme.bodySmall),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: hasUnread ? FontWeight.w700 : null,
+                    color: hasUnread ? scheme.primary : null,
+                  )),
         ],
       ),
       subtitle: Row(
@@ -138,9 +148,28 @@ class _ConversationTile extends ConsumerWidget {
               '${c.last.outgoing ? 'You: ' : ''}${c.last.body}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: hasUnread
+                  ? TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
+                    )
+                  : null,
             ),
           ),
-          if (c.count > 1)
+          if (hasUnread)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: CircleAvatar(
+                radius: 10,
+                backgroundColor: scheme.primary,
+                child: Text('${c.unread}',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onPrimary)),
+              ),
+            )
+          else if (c.count > 1)
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Text('${c.count}',

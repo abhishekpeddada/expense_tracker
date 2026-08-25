@@ -75,6 +75,7 @@ class SmsService {
       body: body,
       receivedAt: DateTime.now(),
       outgoing: const Value(true),
+      read: const Value(true),
     ));
   }
 

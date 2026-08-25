@@ -29,6 +29,13 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Opening the thread clears its unread state (bold in the inbox).
+    ref.read(dbProvider).markThreadRead(widget.sender);
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();

@@ -45,7 +45,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     with WidgetsBindingObserver {
   int _index = 0;
 
-  static const _titles = ['Dashboard', 'Transactions', 'Messages'];
+  static const _titles = ['Messages', 'Transactions', 'Dashboard'];
 
   @override
   void initState() {
@@ -79,9 +79,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
       body: IndexedStack(
         index: _index,
         children: const [
-          DashboardPage(),
-          TransactionsPage(),
           MessagesPage(),
+          TransactionsPage(),
+          DashboardPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -89,9 +89,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: [
           const NavigationDestination(
-            icon: Icon(Icons.pie_chart_outline),
-            selectedIcon: Icon(Icons.pie_chart),
-            label: 'Dashboard',
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Messages',
           ),
           NavigationDestination(
             icon: Badge(
@@ -103,9 +103,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
             label: 'Transactions',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Messages',
+            icon: Icon(Icons.pie_chart_outline),
+            selectedIcon: Icon(Icons.pie_chart),
+            label: 'Dashboard',
           ),
         ],
       ),

@@ -117,4 +117,12 @@ class AppDb extends _$AppDb {
 
   Future<int> insertMessage(SmsMessagesCompanion msg) =>
       into(smsMessages).insert(msg);
+
+  /// Marks all incoming messages from a sender as read.
+  Future<void> markThreadRead(String sender) => (update(smsMessages)
+        ..where((m) =>
+            m.sender.equals(sender) &
+            m.read.equals(false) &
+            m.outgoing.equals(false)))
+      .write(const SmsMessagesCompanion(read: Value(true)));
 }
