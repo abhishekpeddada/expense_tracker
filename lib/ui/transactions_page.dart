@@ -29,7 +29,28 @@ class TransactionsPage extends ConsumerWidget {
         }
         return ListView.builder(
           itemCount: list.length,
-          itemBuilder: (context, i) => TransactionTile(txn: list[i]),
+          itemBuilder: (context, i) {
+            final txn = list[i];
+            return Dismissible(
+              key: ValueKey('txn-${txn.id}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                color: Colors.red.shade700,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 24),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              onDismissed: (_) async {
+                await ref.read(dbProvider).deleteTransaction(txn.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Transaction deleted')),
+                  );
+                }
+              },
+              child: TransactionTile(txn: txn),
+            );
+          },
         );
       },
     );
@@ -96,10 +117,24 @@ Future<void> showCategorySheet(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'What was ${_rupee.format(txn.amount)}'
-              '${txn.merchant != null ? ' at ${txn.merchant}' : ''} for?',
-              style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'What was ${_rupee.format(txn.amount)}'
+                    '${txn.merchant != null ? ' at ${txn.merchant}' : ''} for?',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Delete transaction',
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                  onPressed: () async {
+                    await ref.read(dbProvider).deleteTransaction(txn.id);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

@@ -127,11 +127,16 @@ class SmsService {
     for (final entry in pending.entries) {
       final entryId = entry.key as String;
       final category = entry.value as String;
-      final applied = await _db.setCategoryBySmsEntry(entryId, category);
-      if (applied) {
-        await _channel
-            .invokeMethod('removePendingCategory', {'entryId': entryId});
+      try {
+        // Fills in the category only if still uncategorized, then always
+        // clears the pending entry — a stale pick must never keep
+        // re-applying itself over later in-app changes.
+        await _db.setCategoryBySmsEntry(entryId, category);
+      } catch (err) {
+        debugPrint('Failed to apply pending category: $err');
       }
+      await _channel
+          .invokeMethod('removePendingCategory', {'entryId': entryId});
     }
   }
 }

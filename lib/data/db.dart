@@ -95,13 +95,13 @@ class AppDb extends _$AppDb {
       (delete(transactions)..where((t) => t.id.equals(id))).go();
 
   /// Applies a category picked on the notification to the transaction that
-  /// came from that SMS entry. Returns true when a row was updated.
-  Future<bool> setCategoryBySmsEntry(String entryId, String category) async {
-    final n = await (update(transactions)
-          ..where((t) => t.smsEntryId.equals(entryId)))
-        .write(TransactionsCompanion(category: Value(category)));
-    return n > 0;
-  }
+  /// came from that SMS entry. Only fills in uncategorized transactions —
+  /// a category the user already set in-app must never be overwritten by a
+  /// stale notification pick.
+  Future<void> setCategoryBySmsEntry(String entryId, String category) =>
+      (update(transactions)
+            ..where((t) => t.smsEntryId.equals(entryId) & t.category.isNull()))
+          .write(TransactionsCompanion(category: Value(category)));
 
   // ---- Messages ----
 
