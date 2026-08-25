@@ -6,7 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.provider.Telephony
 import android.telephony.SmsManager
 import androidx.core.app.ActivityCompat
@@ -25,7 +27,7 @@ class MainActivity : FlutterActivity() {
         private var channel: MethodChannel? = null
 
         fun pingFlutter() {
-            channel?.invokeMethod("smsPing", null)
+            runCatching { channel?.invokeMethod("smsPing", null) }
         }
     }
 
@@ -51,7 +53,15 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "requestPermissions" -> {
-                    val wanted = mutableListOf(Manifest.permission.READ_CONTACTS)
+                    // SMS permissions are normally auto-granted with
+                    // ROLE_SMS, but not on every OEM build — request them
+                    // explicitly so reception never silently fails.
+                    val wanted = mutableListOf(
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.RECEIVE_SMS,
+                        Manifest.permission.READ_SMS,
+                        Manifest.permission.SEND_SMS,
+                    )
                     if (Build.VERSION.SDK_INT >= 33) {
                         wanted.add(Manifest.permission.POST_NOTIFICATIONS)
                     }
@@ -62,6 +72,20 @@ class MainActivity : FlutterActivity() {
                         ActivityCompat.requestPermissions(
                             this, missing.toTypedArray(), REQ_NOTIF
                         )
+                    }
+                    // OEM battery managers (Moto included) put apps in a
+                    // restricted state where broadcasts are dropped — ask
+                    // to be exempted so SMS_DELIVER always reaches us.
+                    val pm = getSystemService(PowerManager::class.java)
+                    if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                        runCatching {
+                            startActivity(
+                                Intent(
+                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                    Uri.parse("package:$packageName")
+                                )
+                            )
+                        }
                     }
                     result.success(null)
                 }
