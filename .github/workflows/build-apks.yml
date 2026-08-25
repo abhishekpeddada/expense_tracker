@@ -1,0 +1,52 @@
+name: build-apks
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.1"
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --release --split-per-abi
+
+      - name: Rename APKs
+        run: |
+          cd build/app/outputs/flutter-apk
+          for f in app-*-release.apk; do
+            mv "$f" "expense-tracker-${f#app-}"
+          done
+          ls -la
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Expense Tracker build ${{ github.run_number }}"
+          body: |
+            Split APKs built from ${{ github.sha }}.
+
+            - **arm64-v8a** — most phones from ~2017 onwards (pick this one)
+            - **armeabi-v7a** — older 32-bit phones
+            - **x86_64** — emulators
+          files: build/app/outputs/flutter-apk/expense-tracker-*.apk
