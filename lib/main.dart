@@ -52,7 +52,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     final sms = ref.read(smsServiceProvider);
-    sms.requestNotificationPermission();
+    sms.requestPermissions();
     sms.drainQueue();
   }
 

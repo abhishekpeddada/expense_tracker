@@ -42,6 +42,9 @@ class SmsMessages extends Table {
   DateTimeColumn get receivedAt => dateTime()();
   BoolColumn get isTransaction => boolean().withDefault(const Constant(false))();
   BoolColumn get read => boolean().withDefault(const Constant(false))();
+
+  /// True for messages sent by the user from this app.
+  BoolColumn get outgoing => boolean().withDefault(const Constant(false))();
 }
 
 @DriftDatabase(tables: [Transactions, SmsMessages])
@@ -52,13 +55,16 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.addColumn(transactions, transactions.smsEntryId);
+          }
+          if (from < 3) {
+            await m.addColumn(smsMessages, smsMessages.outgoing);
           }
         },
       );
@@ -102,6 +108,12 @@ class AppDb extends _$AppDb {
   Stream<List<SmsMessage>> watchMessages() =>
       (select(smsMessages)..orderBy([(m) => OrderingTerm.desc(m.receivedAt)]))
           .watch();
+
+  /// All messages exchanged with one sender, oldest first (for thread view).
+  Stream<List<SmsMessage>> watchThread(String sender) => (select(smsMessages)
+        ..where((m) => m.sender.equals(sender))
+        ..orderBy([(m) => OrderingTerm.asc(m.receivedAt)]))
+      .watch();
 
   Future<int> insertMessage(SmsMessagesCompanion msg) =>
       into(smsMessages).insert(msg);

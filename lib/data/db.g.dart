@@ -942,6 +942,21 @@ class $SmsMessagesTable extends SmsMessages
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _outgoingMeta = const VerificationMeta(
+    'outgoing',
+  );
+  @override
+  late final GeneratedColumn<bool> outgoing = GeneratedColumn<bool>(
+    'outgoing',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("outgoing" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -950,6 +965,7 @@ class $SmsMessagesTable extends SmsMessages
     receivedAt,
     isTransaction,
     read,
+    outgoing,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1005,6 +1021,12 @@ class $SmsMessagesTable extends SmsMessages
         read.isAcceptableOrUnknown(data['read']!, _readMeta),
       );
     }
+    if (data.containsKey('outgoing')) {
+      context.handle(
+        _outgoingMeta,
+        outgoing.isAcceptableOrUnknown(data['outgoing']!, _outgoingMeta),
+      );
+    }
     return context;
   }
 
@@ -1038,6 +1060,10 @@ class $SmsMessagesTable extends SmsMessages
         DriftSqlType.bool,
         data['${effectivePrefix}read'],
       )!,
+      outgoing: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}outgoing'],
+      )!,
     );
   }
 
@@ -1054,6 +1080,9 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
   final DateTime receivedAt;
   final bool isTransaction;
   final bool read;
+
+  /// True for messages sent by the user from this app.
+  final bool outgoing;
   const SmsMessage({
     required this.id,
     required this.sender,
@@ -1061,6 +1090,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
     required this.receivedAt,
     required this.isTransaction,
     required this.read,
+    required this.outgoing,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1071,6 +1101,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
     map['received_at'] = Variable<DateTime>(receivedAt);
     map['is_transaction'] = Variable<bool>(isTransaction);
     map['read'] = Variable<bool>(read);
+    map['outgoing'] = Variable<bool>(outgoing);
     return map;
   }
 
@@ -1082,6 +1113,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
       receivedAt: Value(receivedAt),
       isTransaction: Value(isTransaction),
       read: Value(read),
+      outgoing: Value(outgoing),
     );
   }
 
@@ -1097,6 +1129,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
       receivedAt: serializer.fromJson<DateTime>(json['receivedAt']),
       isTransaction: serializer.fromJson<bool>(json['isTransaction']),
       read: serializer.fromJson<bool>(json['read']),
+      outgoing: serializer.fromJson<bool>(json['outgoing']),
     );
   }
   @override
@@ -1109,6 +1142,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
       'receivedAt': serializer.toJson<DateTime>(receivedAt),
       'isTransaction': serializer.toJson<bool>(isTransaction),
       'read': serializer.toJson<bool>(read),
+      'outgoing': serializer.toJson<bool>(outgoing),
     };
   }
 
@@ -1119,6 +1153,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
     DateTime? receivedAt,
     bool? isTransaction,
     bool? read,
+    bool? outgoing,
   }) => SmsMessage(
     id: id ?? this.id,
     sender: sender ?? this.sender,
@@ -1126,6 +1161,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
     receivedAt: receivedAt ?? this.receivedAt,
     isTransaction: isTransaction ?? this.isTransaction,
     read: read ?? this.read,
+    outgoing: outgoing ?? this.outgoing,
   );
   SmsMessage copyWithCompanion(SmsMessagesCompanion data) {
     return SmsMessage(
@@ -1139,6 +1175,7 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
           ? data.isTransaction.value
           : this.isTransaction,
       read: data.read.present ? data.read.value : this.read,
+      outgoing: data.outgoing.present ? data.outgoing.value : this.outgoing,
     );
   }
 
@@ -1150,14 +1187,15 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
           ..write('body: $body, ')
           ..write('receivedAt: $receivedAt, ')
           ..write('isTransaction: $isTransaction, ')
-          ..write('read: $read')
+          ..write('read: $read, ')
+          ..write('outgoing: $outgoing')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, sender, body, receivedAt, isTransaction, read);
+      Object.hash(id, sender, body, receivedAt, isTransaction, read, outgoing);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1167,7 +1205,8 @@ class SmsMessage extends DataClass implements Insertable<SmsMessage> {
           other.body == this.body &&
           other.receivedAt == this.receivedAt &&
           other.isTransaction == this.isTransaction &&
-          other.read == this.read);
+          other.read == this.read &&
+          other.outgoing == this.outgoing);
 }
 
 class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
@@ -1177,6 +1216,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
   final Value<DateTime> receivedAt;
   final Value<bool> isTransaction;
   final Value<bool> read;
+  final Value<bool> outgoing;
   const SmsMessagesCompanion({
     this.id = const Value.absent(),
     this.sender = const Value.absent(),
@@ -1184,6 +1224,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
     this.receivedAt = const Value.absent(),
     this.isTransaction = const Value.absent(),
     this.read = const Value.absent(),
+    this.outgoing = const Value.absent(),
   });
   SmsMessagesCompanion.insert({
     this.id = const Value.absent(),
@@ -1192,6 +1233,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
     required DateTime receivedAt,
     this.isTransaction = const Value.absent(),
     this.read = const Value.absent(),
+    this.outgoing = const Value.absent(),
   }) : sender = Value(sender),
        body = Value(body),
        receivedAt = Value(receivedAt);
@@ -1202,6 +1244,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
     Expression<DateTime>? receivedAt,
     Expression<bool>? isTransaction,
     Expression<bool>? read,
+    Expression<bool>? outgoing,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1210,6 +1253,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
       if (receivedAt != null) 'received_at': receivedAt,
       if (isTransaction != null) 'is_transaction': isTransaction,
       if (read != null) 'read': read,
+      if (outgoing != null) 'outgoing': outgoing,
     });
   }
 
@@ -1220,6 +1264,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
     Value<DateTime>? receivedAt,
     Value<bool>? isTransaction,
     Value<bool>? read,
+    Value<bool>? outgoing,
   }) {
     return SmsMessagesCompanion(
       id: id ?? this.id,
@@ -1228,6 +1273,7 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
       receivedAt: receivedAt ?? this.receivedAt,
       isTransaction: isTransaction ?? this.isTransaction,
       read: read ?? this.read,
+      outgoing: outgoing ?? this.outgoing,
     );
   }
 
@@ -1252,6 +1298,9 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
     if (read.present) {
       map['read'] = Variable<bool>(read.value);
     }
+    if (outgoing.present) {
+      map['outgoing'] = Variable<bool>(outgoing.value);
+    }
     return map;
   }
 
@@ -1263,7 +1312,8 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
           ..write('body: $body, ')
           ..write('receivedAt: $receivedAt, ')
           ..write('isTransaction: $isTransaction, ')
-          ..write('read: $read')
+          ..write('read: $read, ')
+          ..write('outgoing: $outgoing')
           ..write(')'))
         .toString();
   }
@@ -1684,6 +1734,7 @@ typedef $$SmsMessagesTableCreateCompanionBuilder =
       required DateTime receivedAt,
       Value<bool> isTransaction,
       Value<bool> read,
+      Value<bool> outgoing,
     });
 typedef $$SmsMessagesTableUpdateCompanionBuilder =
     SmsMessagesCompanion Function({
@@ -1693,6 +1744,7 @@ typedef $$SmsMessagesTableUpdateCompanionBuilder =
       Value<DateTime> receivedAt,
       Value<bool> isTransaction,
       Value<bool> read,
+      Value<bool> outgoing,
     });
 
 class $$SmsMessagesTableFilterComposer
@@ -1731,6 +1783,11 @@ class $$SmsMessagesTableFilterComposer
 
   ColumnFilters<bool> get read => $composableBuilder(
     column: $table.read,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get outgoing => $composableBuilder(
+    column: $table.outgoing,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1773,6 +1830,11 @@ class $$SmsMessagesTableOrderingComposer
     column: $table.read,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get outgoing => $composableBuilder(
+    column: $table.outgoing,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SmsMessagesTableAnnotationComposer
@@ -1805,6 +1867,9 @@ class $$SmsMessagesTableAnnotationComposer
 
   GeneratedColumn<bool> get read =>
       $composableBuilder(column: $table.read, builder: (column) => column);
+
+  GeneratedColumn<bool> get outgoing =>
+      $composableBuilder(column: $table.outgoing, builder: (column) => column);
 }
 
 class $$SmsMessagesTableTableManager
@@ -1841,6 +1906,7 @@ class $$SmsMessagesTableTableManager
                 Value<DateTime> receivedAt = const Value.absent(),
                 Value<bool> isTransaction = const Value.absent(),
                 Value<bool> read = const Value.absent(),
+                Value<bool> outgoing = const Value.absent(),
               }) => SmsMessagesCompanion(
                 id: id,
                 sender: sender,
@@ -1848,6 +1914,7 @@ class $$SmsMessagesTableTableManager
                 receivedAt: receivedAt,
                 isTransaction: isTransaction,
                 read: read,
+                outgoing: outgoing,
               ),
           createCompanionCallback:
               ({
@@ -1857,6 +1924,7 @@ class $$SmsMessagesTableTableManager
                 required DateTime receivedAt,
                 Value<bool> isTransaction = const Value.absent(),
                 Value<bool> read = const Value.absent(),
+                Value<bool> outgoing = const Value.absent(),
               }) => SmsMessagesCompanion.insert(
                 id: id,
                 sender: sender,
@@ -1864,6 +1932,7 @@ class $$SmsMessagesTableTableManager
                 receivedAt: receivedAt,
                 isTransaction: isTransaction,
                 read: read,
+                outgoing: outgoing,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

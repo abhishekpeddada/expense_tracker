@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,16 +42,41 @@ class SmsService {
     }
   }
 
-  Future<void> requestNotificationPermission() async {
+  /// Requests notification + contacts permissions.
+  Future<void> requestPermissions() async {
     try {
-      await _channel.invokeMethod('requestNotificationPermission');
+      await _channel.invokeMethod('requestPermissions');
     } on MissingPluginException {
       // ignore off-Android
     }
   }
 
-  Future<void> sendSms({required String to, required String body}) =>
-      _channel.invokeMethod('sendSms', {'to': to, 'body': body});
+  final _contactCache = <String, String?>{};
+
+  /// Contact display name for a phone number, or null (no permission, no
+  /// match, or a shortcode sender like VM-HDFCBK).
+  Future<String?> contactName(String number) async {
+    if (_contactCache.containsKey(number)) return _contactCache[number];
+    String? name;
+    try {
+      name = await _channel
+          .invokeMethod<String>('getContactName', {'number': number});
+    } on MissingPluginException {
+      name = null;
+    }
+    _contactCache[number] = name;
+    return name;
+  }
+
+  Future<void> sendSms({required String to, required String body}) async {
+    await _channel.invokeMethod('sendSms', {'to': to, 'body': body});
+    await _db.insertMessage(SmsMessagesCompanion.insert(
+      sender: to,
+      body: body,
+      receivedAt: DateTime.now(),
+      outgoing: const Value(true),
+    ));
+  }
 
   /// Pulls natively-queued SMS into the DB. Safe to call repeatedly.
   Future<void> drainQueue() async {
@@ -118,6 +144,11 @@ final smsServiceProvider = Provider<SmsService>((ref) {
 /// Live view of whether we hold the default-SMS-app role. Polled, because
 /// the role can change from the system dialog or Settings without any
 /// reliable in-app callback.
+/// Contact name lookup, cached per number for the app session.
+final contactNameProvider = FutureProvider.family<String?, String>(
+  (ref, number) => ref.watch(smsServiceProvider).contactName(number),
+);
+
 final isDefaultSmsAppProvider = StreamProvider<bool>((ref) async* {
   final sms = ref.watch(smsServiceProvider);
   while (true) {

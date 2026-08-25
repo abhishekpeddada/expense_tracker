@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../data/db.dart';
 import '../data/providers.dart';
 import '../services/sms_service.dart';
+import 'thread_page.dart';
 
 final _dateFmt = DateFormat('d MMM, h:mm a');
 
-/// SMS inbox. For now it lists messages stored in the local DB; the native
-/// default-SMS-app layer will feed real incoming SMS into that DB.
+class _Conversation {
+  final String sender;
+  final SmsMessage last;
+  final int count;
+  final bool hasTransaction;
+  const _Conversation(this.sender, this.last, this.count, this.hasTransaction);
+}
+
+/// SMS inbox grouped into one conversation per sender.
 class MessagesPage extends ConsumerWidget {
   const MessagesPage({super.key});
 
@@ -45,31 +54,28 @@ class MessagesPage extends ConsumerWidget {
             ),
           );
         }
+
+        // list is newest-first, so the first message seen per sender is the
+        // conversation preview.
+        final bySender = <String, List<SmsMessage>>{};
+        for (final m in list) {
+          bySender.putIfAbsent(m.sender, () => []).add(m);
+        }
+        final conversations = [
+          for (final e in bySender.entries)
+            _Conversation(
+              e.key,
+              e.value.first,
+              e.value.length,
+              e.value.any((m) => m.isTransaction),
+            ),
+        ];
+
         return ListView.separated(
-          itemCount: list.length,
+          itemCount: conversations.length,
           separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (context, i) {
-            final m = list[i];
-            return ListTile(
-              leading: CircleAvatar(
-                child: Icon(m.isTransaction
-                    ? Icons.currency_rupee
-                    : Icons.person_outline),
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(m.sender,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                  Text(_dateFmt.format(m.receivedAt),
-                      style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-              subtitle:
-                  Text(m.body, maxLines: 2, overflow: TextOverflow.ellipsis),
-            );
-          },
+          itemBuilder: (context, i) =>
+              _ConversationTile(conversation: conversations[i]),
         );
       },
     );
@@ -95,6 +101,59 @@ class MessagesPage extends ConsumerWidget {
           ),
         Expanded(child: body),
       ],
+    );
+  }
+}
+
+class _ConversationTile extends ConsumerWidget {
+  final _Conversation conversation;
+  const _ConversationTile({required this.conversation});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = conversation;
+    final name =
+        ref.watch(contactNameProvider(c.sender)).valueOrNull ?? c.sender;
+
+    return ListTile(
+      leading: CircleAvatar(
+        child: Icon(
+            c.hasTransaction ? Icons.currency_rupee : Icons.person_outline),
+      ),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          Text(_dateFmt.format(c.last.receivedAt),
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+      subtitle: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${c.last.outgoing ? 'You: ' : ''}${c.last.body}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (c.count > 1)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text('${c.count}',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
+        ],
+      ),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ThreadPage(sender: c.sender, displayName: name),
+        ),
+      ),
     );
   }
 }

@@ -56,7 +56,7 @@ class TransactionTile extends ConsumerWidget {
           color: color,
         ),
       ),
-      title: Text(txn.merchant ?? txn.bank ?? 'Unknown'),
+      title: Text(txn.merchant ?? txn.bank ?? txn.smsSender ?? 'Unknown'),
       subtitle: Text(
         [
           _dateFmt.format(txn.occurredAt),
