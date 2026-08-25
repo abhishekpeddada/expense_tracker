@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/models.dart';
 import '../parsing/sms_parser.dart';
 import 'db.dart';
 
@@ -21,6 +22,66 @@ final uncategorizedProvider = StreamProvider<List<Transaction>>(
 final messagesProvider = StreamProvider<List<SmsMessage>>(
   (ref) => ref.watch(dbProvider).watchMessages(),
 );
+
+/// A bank account / credit card derived from transaction data. There is no
+/// live bank link — accounts appear automatically from parsed SMS and
+/// imported statements (grouped by bank + last-4 + kind).
+class DerivedAccount {
+  final String? bank;
+  final String? tail;
+  final AccountKind kind;
+  final List<Transaction> transactions;
+
+  /// Balance ("Avl bal" / card available limit) from the most recent
+  /// transaction that stated one.
+  final double? balance;
+  final DateTime? balanceAsOf;
+
+  const DerivedAccount({
+    required this.bank,
+    required this.tail,
+    required this.kind,
+    required this.transactions,
+    this.balance,
+    this.balanceAsOf,
+  });
+
+  String get title => bank ?? (kind == AccountKind.creditCard ? 'Card' : 'Account');
+  DateTime get lastActivity => transactions.first.occurredAt;
+}
+
+/// Groups transactions into derived accounts, newest activity first.
+/// Transactions with neither a bank nor a last-4 are left out.
+final accountsProvider = Provider<List<DerivedAccount>>((ref) {
+  final txns = ref.watch(transactionsProvider).valueOrNull ?? [];
+  final groups = <String, List<Transaction>>{};
+  for (final t in txns) {
+    if (t.bank == null && t.accountTail == null) continue;
+    final key = '${t.bank ?? '?'}|${t.accountTail ?? '?'}|${t.accountKind.index}';
+    groups.putIfAbsent(key, () => []).add(t);
+  }
+  final accounts = <DerivedAccount>[];
+  for (final list in groups.values) {
+    // transactionsProvider is ordered newest-first already.
+    Transaction? withBalance;
+    for (final t in list) {
+      if (t.balance != null) {
+        withBalance = t;
+        break;
+      }
+    }
+    accounts.add(DerivedAccount(
+      bank: list.first.bank,
+      tail: list.first.accountTail,
+      kind: list.first.accountKind,
+      transactions: list,
+      balance: withBalance?.balance,
+      balanceAsOf: withBalance?.occurredAt,
+    ));
+  }
+  accounts.sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
+  return accounts;
+});
 
 class IngestResult {
   final ParsedTransaction? parsed;
@@ -61,6 +122,7 @@ Future<IngestResult> ingestSms(
       rawSms: Value(body),
       smsSender: Value(sender),
       smsEntryId: Value(smsEntryId),
+      balance: Value(parsed.balance),
       occurredAt: at,
     ));
   }

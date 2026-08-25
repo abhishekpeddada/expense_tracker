@@ -26,6 +26,10 @@ class Transactions extends Table {
   /// picks made on the notification can find their transaction later.
   TextColumn get smsEntryId => text().nullable()();
 
+  /// Account balance (or credit-card available limit) after this
+  /// transaction, when the SMS/statement stated one.
+  RealColumn get balance => real().nullable()();
+
   DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -55,7 +59,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +69,9 @@ class AppDb extends _$AppDb {
           }
           if (from < 3) {
             await m.addColumn(smsMessages, smsMessages.outgoing);
+          }
+          if (from < 4) {
+            await m.addColumn(transactions, transactions.balance);
           }
         },
       );
@@ -93,6 +100,25 @@ class AppDb extends _$AppDb {
 
   Future<void> deleteTransaction(int id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
+
+  /// Duplicate check used by statement import: same day, amount, type, and
+  /// description means the row was already imported (or came in via SMS).
+  Future<bool> hasSimilarTransaction(
+      DateTime day, double amount, TxnType type, String? merchant) async {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
+    final q = select(transactions)
+      ..where((t) =>
+          t.amount.equals(amount) &
+          t.type.equalsValue(type) &
+          t.occurredAt.isBiggerOrEqualValue(start) &
+          t.occurredAt.isSmallerThanValue(end) &
+          (merchant == null
+              ? t.merchant.isNull()
+              : t.merchant.equals(merchant)))
+      ..limit(1);
+    return (await q.get()).isNotEmpty;
+  }
 
   /// Applies a category picked on the notification to the transaction that
   /// came from that SMS entry. Only fills in uncategorized transactions —

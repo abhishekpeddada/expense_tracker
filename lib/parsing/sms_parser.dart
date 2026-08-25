@@ -15,6 +15,10 @@ class ParsedTransaction {
   /// Bank name guessed from the message body, if any.
   final String? bank;
 
+  /// Balance after the transaction ("Avl bal") for bank accounts, or the
+  /// available limit for credit cards, when the SMS states one.
+  final double? balance;
+
   const ParsedTransaction({
     required this.amount,
     required this.type,
@@ -22,6 +26,7 @@ class ParsedTransaction {
     this.accountTail,
     this.merchant,
     this.bank,
+    this.balance,
   });
 
   @override
@@ -61,6 +66,12 @@ class SmsParser {
 
   static final _creditCardRe = RegExp(
     r'credit\s*card|\bcc\b(?:\s+ending|\s*x+\d)|card\s+(?:no\.?\s*)?(?:ending|xx)',
+    caseSensitive: false,
+  );
+
+  static final _balanceRe = RegExp(
+    r'(?:avl|available|avail\.?)\s*(?:bal(?:ance)?|limit)\s*:?\s*'
+    r'(?:is\s+)?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)',
     caseSensitive: false,
   );
 
@@ -149,6 +160,9 @@ class SmsParser {
       }
     }
 
+    final balance = double.tryParse(
+        _balanceRe.firstMatch(text)?.group(1)?.replaceAll(',', '') ?? '');
+
     return ParsedTransaction(
       amount: amount,
       type: type,
@@ -156,6 +170,7 @@ class SmsParser {
       accountTail: tail,
       merchant: merchant,
       bank: bank,
+      balance: balance,
     );
   }
 

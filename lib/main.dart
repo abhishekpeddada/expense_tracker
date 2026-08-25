@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/providers.dart';
 import 'services/sms_service.dart';
+import 'ui/accounts_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/messages_page.dart';
 import 'ui/transactions_page.dart';
@@ -88,7 +89,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     with WidgetsBindingObserver {
   int _index = 0;
 
-  static const _titles = ['Messages', 'Transactions', 'Dashboard'];
+  static const _titles = ['Messages', 'Transactions', 'Accounts', 'Dashboard'];
 
   @override
   void initState() {
@@ -136,6 +137,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
         children: const [
           MessagesPage(),
           TransactionsPage(),
+          AccountsPage(),
           DashboardPage(),
         ],
       ),
@@ -156,6 +158,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
             ),
             selectedIcon: const Icon(Icons.receipt_long),
             label: 'Transactions',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.account_balance_outlined),
+            selectedIcon: Icon(Icons.account_balance),
+            label: 'Accounts',
           ),
           const NavigationDestination(
             icon: Icon(Icons.pie_chart_outline),
