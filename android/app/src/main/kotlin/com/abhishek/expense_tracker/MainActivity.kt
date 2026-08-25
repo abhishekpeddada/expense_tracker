@@ -94,6 +94,31 @@ class MainActivity : FlutterActivity() {
                     result.success(number?.let { lookupContactName(it) })
                 }
                 "drainSmsQueue" -> result.success(SmsQueue.drain(this))
+                "getReceiveLog" -> result.success(SmsQueue.readLog(this))
+                "clearReceiveLog" -> {
+                    SmsQueue.clearLog(this)
+                    result.success(null)
+                }
+                "getDiagnostics" -> {
+                    val pm = getSystemService(PowerManager::class.java)
+                    result.success(
+                        mapOf(
+                            "isDefaultSmsApp" to isDefaultSmsApp(),
+                            "batteryUnrestricted" to
+                                pm.isIgnoringBatteryOptimizations(packageName),
+                            "receiveSms" to (checkSelfPermission(
+                                Manifest.permission.RECEIVE_SMS
+                            ) == PackageManager.PERMISSION_GRANTED),
+                            "readSms" to (checkSelfPermission(
+                                Manifest.permission.READ_SMS
+                            ) == PackageManager.PERMISSION_GRANTED),
+                            "notifications" to (Build.VERSION.SDK_INT < 33 ||
+                                checkSelfPermission(
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED),
+                        )
+                    )
+                }
                 "getPendingCategories" ->
                     result.success(SmsQueue.getPendingCategories(this))
                 "removePendingCategory" -> {

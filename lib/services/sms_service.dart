@@ -51,6 +51,41 @@ class SmsService {
     }
   }
 
+  /// Setup checks (default-app role, permissions, battery state).
+  Future<Map<String, bool>> diagnostics() async {
+    try {
+      final m = await _channel
+          .invokeMethod<Map<Object?, Object?>>('getDiagnostics');
+      return {
+        for (final e in (m ?? {}).entries)
+          e.key as String: e.value as bool,
+      };
+    } on MissingPluginException {
+      return {};
+    }
+  }
+
+  /// What the broadcast receiver logged for incoming SMS.
+  Future<List<Map<String, Object?>>> receiveLog() async {
+    try {
+      final list =
+          await _channel.invokeMethod<List<Object?>>('getReceiveLog') ?? [];
+      return [
+        for (final e in list) (e as Map).cast<String, Object?>(),
+      ];
+    } on MissingPluginException {
+      return [];
+    }
+  }
+
+  Future<void> clearReceiveLog() async {
+    try {
+      await _channel.invokeMethod('clearReceiveLog');
+    } on MissingPluginException {
+      // ignore off-Android
+    }
+  }
+
   final _contactCache = <String, String?>{};
 
   /// Contact display name for a phone number, or null (no permission, no
@@ -147,14 +182,14 @@ final smsServiceProvider = Provider<SmsService>((ref) {
   return service;
 });
 
-/// Live view of whether we hold the default-SMS-app role. Polled, because
-/// the role can change from the system dialog or Settings without any
-/// reliable in-app callback.
 /// Contact name lookup, cached per number for the app session.
 final contactNameProvider = FutureProvider.family<String?, String>(
   (ref, number) => ref.watch(smsServiceProvider).contactName(number),
 );
 
+/// Live view of whether we hold the default-SMS-app role. Polled, because
+/// the role can change from the system dialog or Settings without any
+/// reliable in-app callback.
 final isDefaultSmsAppProvider = StreamProvider<bool>((ref) async* {
   final sms = ref.watch(smsServiceProvider);
   while (true) {

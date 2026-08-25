@@ -25,8 +25,14 @@ class SmsReceiver : BroadcastReceiver() {
         val ts = msgs[0].timestampMillis
         val entryId = UUID.randomUUID().toString()
 
-        runCatching { SmsQueue.add(context, entryId, sender, body, ts) }
-            .onFailure { Log.e(TAG, "queue add failed", it) }
+        val preview = if (body.length > 60) body.take(60) + "…" else body
+        runCatching {
+            SmsQueue.add(context, entryId, sender, body, ts)
+            SmsQueue.log(context, "received from $sender: $preview")
+        }.onFailure {
+            Log.e(TAG, "queue add failed", it)
+            runCatching { SmsQueue.log(context, "QUEUE FAILED from $sender: $it") }
+        }
 
         // The default SMS app is responsible for writing incoming messages
         // to the system SMS provider (AOSP Messaging does the same). This
@@ -40,7 +46,10 @@ class SmsReceiver : BroadcastReceiver() {
                 put(Telephony.Sms.SEEN, 0)
             }
             context.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
-        }.onFailure { Log.e(TAG, "telephony provider write failed", it) }
+        }.onFailure {
+            Log.e(TAG, "telephony provider write failed", it)
+            runCatching { SmsQueue.log(context, "provider write failed: $it") }
+        }
 
         runCatching {
             val gate = TxnGate.check(body)
@@ -51,6 +60,8 @@ class SmsReceiver : BroadcastReceiver() {
             }
         }.onFailure {
             Log.e(TAG, "notification failed", it)
+            runCatching { SmsQueue.log(context, "notification failed: $it") }
+            // Never let a notification problem hide the message entirely.
             runCatching { Notifier.postMessage(context, entryId, sender, body) }
         }
 

@@ -13,6 +13,8 @@ object SmsQueue {
     private const val PREFS = "sms_queue"
     private const val KEY = "entries"
     private const val KEY_PENDING = "pending_categories"
+    private const val KEY_LOG = "receive_log"
+    private const val LOG_MAX = 50
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -68,6 +70,40 @@ object SmsQueue {
         val obj = JSONObject(prefs(ctx).getString(KEY_PENDING, "{}"))
         obj.remove(entryId)
         prefs(ctx).edit().putString(KEY_PENDING, obj.toString()).apply()
+    }
+
+    /**
+     * Append-only diagnostic log of what the receiver saw, so reception
+     * problems can be inspected in-app instead of needing adb.
+     */
+    @Synchronized
+    fun log(ctx: Context, message: String) {
+        val arr = JSONArray(prefs(ctx).getString(KEY_LOG, "[]"))
+        arr.put(JSONObject().apply {
+            put("ts", System.currentTimeMillis())
+            put("message", message)
+        })
+        // keep only the most recent LOG_MAX entries
+        val trimmed = JSONArray()
+        val start = maxOf(0, arr.length() - LOG_MAX)
+        for (i in start until arr.length()) trimmed.put(arr.getJSONObject(i))
+        prefs(ctx).edit().putString(KEY_LOG, trimmed.toString()).apply()
+    }
+
+    @Synchronized
+    fun readLog(ctx: Context): List<Map<String, Any?>> {
+        val arr = JSONArray(prefs(ctx).getString(KEY_LOG, "[]"))
+        val out = mutableListOf<Map<String, Any?>>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            out.add(mapOf("ts" to o.getLong("ts"), "message" to o.getString("message")))
+        }
+        return out.reversed()
+    }
+
+    @Synchronized
+    fun clearLog(ctx: Context) {
+        prefs(ctx).edit().putString(KEY_LOG, "[]").apply()
     }
 
     /** Returns all queued entries and clears the queue. */

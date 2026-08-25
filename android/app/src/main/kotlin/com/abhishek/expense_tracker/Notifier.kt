@@ -79,7 +79,7 @@ object Notifier {
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            builder.addAction(0, cat.substringBefore(" &"), pi)
+            builder.addAction(android.R.drawable.ic_menu_add, cat.substringBefore(" &"), pi)
         }
 
         // Free-text category typed directly into the notification.
@@ -93,7 +93,9 @@ object Notifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
         builder.addAction(
-            NotificationCompat.Action.Builder(0, "Other…", typePi)
+            NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_menu_edit, "Other…", typePi
+                )
                 .addRemoteInput(
                     RemoteInput.Builder(KEY_CATEGORY_INPUT)
                         .setLabel("Type a category")

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'data/providers.dart';
 import 'services/sms_service.dart';
 import 'ui/accounts_page.dart';
+import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/messages_page.dart';
 import 'ui/transactions_page.dart';
@@ -123,6 +124,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
       appBar: AppBar(
         title: Text(_titles[_index]),
         actions: [
+          if (_index == 0)
+            IconButton(
+              tooltip: 'SMS diagnostics',
+              icon: const Icon(Icons.health_and_safety_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DiagnosticsPage()),
+              ),
+            ),
           IconButton(
             tooltip: pitchBlack ? 'Pitch black: on' : 'Pitch black: off',
             icon: Icon(
