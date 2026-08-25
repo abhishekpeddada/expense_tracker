@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../data/providers.dart';
+import '../services/sms_service.dart';
 
 final _dateFmt = DateFormat('d MMM, h:mm a');
 
@@ -14,7 +15,9 @@ class MessagesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final msgs = ref.watch(messagesProvider);
-    return msgs.when(
+    final isDefault = ref.watch(isDefaultSmsAppProvider).valueOrNull ?? true;
+
+    final body = msgs.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (list) {
@@ -69,6 +72,29 @@ class MessagesPage extends ConsumerWidget {
           },
         );
       },
+    );
+
+    return Column(
+      children: [
+        if (!isDefault)
+          MaterialBanner(
+            content: const Text(
+              'Expense Tracker is not your default SMS app, so it cannot '
+              'see incoming bank messages.',
+            ),
+            leading: const Icon(Icons.sms_failed_outlined),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await ref.read(smsServiceProvider).requestDefaultSmsRole();
+                  ref.invalidate(isDefaultSmsAppProvider);
+                },
+                child: const Text('MAKE DEFAULT'),
+              ),
+            ],
+          ),
+        Expanded(child: body),
+      ],
     );
   }
 }

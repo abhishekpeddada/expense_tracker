@@ -22,10 +22,17 @@ final messagesProvider = StreamProvider<List<SmsMessage>>(
   (ref) => ref.watch(dbProvider).watchMessages(),
 );
 
+class IngestResult {
+  final ParsedTransaction? parsed;
+
+  /// DB id of the inserted transaction, when the SMS parsed as one.
+  final int? txnId;
+  const IngestResult(this.parsed, this.txnId);
+}
+
 /// Ingests an incoming SMS: stores it for the Messages tab and, when it
 /// parses as a transaction, records the transaction as uncategorized.
-/// Returns the parsed result (null when the SMS is not a transaction).
-Future<ParsedTransaction?> ingestSms(
+Future<IngestResult> ingestSms(
   AppDb db, {
   required String sender,
   required String body,
@@ -41,8 +48,9 @@ Future<ParsedTransaction?> ingestSms(
     isTransaction: Value(parsed != null),
   ));
 
+  int? txnId;
   if (parsed != null) {
-    await db.insertTransaction(TransactionsCompanion.insert(
+    txnId = await db.insertTransaction(TransactionsCompanion.insert(
       amount: parsed.amount,
       type: parsed.type,
       accountKind: parsed.accountKind,
@@ -54,5 +62,5 @@ Future<ParsedTransaction?> ingestSms(
       occurredAt: at,
     ));
   }
-  return parsed;
+  return IngestResult(parsed, txnId);
 }

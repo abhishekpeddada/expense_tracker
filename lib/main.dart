@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/providers.dart';
+import 'services/sms_service.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/messages_page.dart';
 import 'ui/transactions_page.dart';
@@ -40,10 +41,34 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends ConsumerState<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
   int _index = 0;
 
   static const _titles = ['Dashboard', 'Transactions', 'Messages'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final sms = ref.read(smsServiceProvider);
+    sms.requestNotificationPermission();
+    sms.drainQueue();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(smsServiceProvider).drainQueue();
+      ref.invalidate(isDefaultSmsAppProvider);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
