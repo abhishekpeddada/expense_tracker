@@ -71,14 +71,39 @@ class SmsService {
           receivedAt: DateTime.fromMillisecondsSinceEpoch(
               (m['ts'] as num?)?.toInt() ??
                   DateTime.now().millisecondsSinceEpoch),
+          smsEntryId: m['id'] as String?,
         );
-        // Category chosen from the notification quick-action.
+        // Category chosen from the notification before this entry was
+        // drained.
         final category = m['category'] as String?;
         if (category != null && result.txnId != null) {
           await _db.setCategory(result.txnId!, category);
         }
       } catch (err) {
         debugPrint('Failed to ingest SMS entry: $err');
+      }
+    }
+    await _applyPendingCategories();
+  }
+
+  /// Applies category picks made on notifications for transactions that were
+  /// already drained into the DB (see CategoryActionReceiver.kt).
+  Future<void> _applyPendingCategories() async {
+    Map<Object?, Object?> pending;
+    try {
+      pending = await _channel
+              .invokeMethod<Map<Object?, Object?>>('getPendingCategories') ??
+          {};
+    } on MissingPluginException {
+      return;
+    }
+    for (final entry in pending.entries) {
+      final entryId = entry.key as String;
+      final category = entry.value as String;
+      final applied = await _db.setCategoryBySmsEntry(entryId, category);
+      if (applied) {
+        await _channel
+            .invokeMethod('removePendingCategory', {'entryId': entryId});
       }
     }
   }
@@ -90,6 +115,13 @@ final smsServiceProvider = Provider<SmsService>((ref) {
   return service;
 });
 
-final isDefaultSmsAppProvider = FutureProvider<bool>(
-  (ref) => ref.watch(smsServiceProvider).isDefaultSmsApp,
-);
+/// Live view of whether we hold the default-SMS-app role. Polled, because
+/// the role can change from the system dialog or Settings without any
+/// reliable in-app callback.
+final isDefaultSmsAppProvider = StreamProvider<bool>((ref) async* {
+  final sms = ref.watch(smsServiceProvider);
+  while (true) {
+    yield await sms.isDefaultSmsApp;
+    await Future<void>.delayed(const Duration(seconds: 2));
+  }
+});

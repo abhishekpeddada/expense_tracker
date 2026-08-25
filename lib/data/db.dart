@@ -22,6 +22,10 @@ class Transactions extends Table {
   TextColumn get rawSms => text().nullable()();
   TextColumn get smsSender => text().nullable()();
 
+  /// Id of the native SMS queue entry this was parsed from, so category
+  /// picks made on the notification can find their transaction later.
+  TextColumn get smsEntryId => text().nullable()();
+
   DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -48,7 +52,16 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(transactions, transactions.smsEntryId);
+          }
+        },
+      );
 
   // ---- Transactions ----
 
@@ -74,6 +87,15 @@ class AppDb extends _$AppDb {
 
   Future<void> deleteTransaction(int id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
+
+  /// Applies a category picked on the notification to the transaction that
+  /// came from that SMS entry. Returns true when a row was updated.
+  Future<bool> setCategoryBySmsEntry(String entryId, String category) async {
+    final n = await (update(transactions)
+          ..where((t) => t.smsEntryId.equals(entryId)))
+        .write(TransactionsCompanion(category: Value(category)));
+    return n > 0;
+  }
 
   // ---- Messages ----
 

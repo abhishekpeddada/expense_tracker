@@ -37,6 +37,7 @@ Future<IngestResult> ingestSms(
   required String sender,
   required String body,
   DateTime? receivedAt,
+  String? smsEntryId,
 }) async {
   final at = receivedAt ?? DateTime.now();
   final parsed = SmsParser.parse(body, sender: sender);
@@ -59,6 +60,7 @@ Future<IngestResult> ingestSms(
       bank: Value(parsed.bank),
       rawSms: Value(body),
       smsSender: Value(sender),
+      smsEntryId: Value(smsEntryId),
       occurredAt: at,
     ));
   }

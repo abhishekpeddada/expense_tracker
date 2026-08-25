@@ -60,6 +60,13 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "drainSmsQueue" -> result.success(SmsQueue.drain(this))
+                "getPendingCategories" ->
+                    result.success(SmsQueue.getPendingCategories(this))
+                "removePendingCategory" -> {
+                    val entryId = call.argument<String>("entryId")
+                    if (entryId != null) SmsQueue.removePendingCategory(this, entryId)
+                    result.success(null)
+                }
                 "sendSms" -> {
                     val to = call.argument<String>("to")
                     val body = call.argument<String>("body")

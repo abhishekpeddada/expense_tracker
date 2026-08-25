@@ -85,7 +85,11 @@ Future<void> showCategorySheet(
   return showModalBottomSheet(
     context: context,
     showDragHandle: true,
-    builder: (context) => SafeArea(
+    isScrollControlled: true,
+    builder: (context) => Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,8 +121,27 @@ Future<void> showCategorySheet(
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              decoration: const InputDecoration(
+                labelText: 'Or type your own category',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              textCapitalization: TextCapitalization.words,
+              onSubmitted: (value) async {
+                final custom = value.trim();
+                if (custom.isEmpty) return;
+                await ref.read(dbProvider).setCategory(txn.id, custom);
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+          ),
           const SizedBox(height: 16),
         ],
+      ),
       ),
     ),
   );

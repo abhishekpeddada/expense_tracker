@@ -12,6 +12,7 @@ import org.json.JSONObject
 object SmsQueue {
     private const val PREFS = "sms_queue"
     private const val KEY = "entries"
+    private const val KEY_PENDING = "pending_categories"
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -40,6 +41,33 @@ object SmsQueue {
             }
         }
         prefs(ctx).edit().putString(KEY, arr.toString()).apply()
+    }
+
+    /**
+     * Category picked on a notification for an SMS that may have already been
+     * drained into the app's DB. Kept until the Dart side confirms it found
+     * and updated the matching transaction.
+     */
+    @Synchronized
+    fun addPendingCategory(ctx: Context, entryId: String, category: String) {
+        val obj = JSONObject(prefs(ctx).getString(KEY_PENDING, "{}"))
+        obj.put(entryId, category)
+        prefs(ctx).edit().putString(KEY_PENDING, obj.toString()).apply()
+    }
+
+    @Synchronized
+    fun getPendingCategories(ctx: Context): Map<String, String> {
+        val obj = JSONObject(prefs(ctx).getString(KEY_PENDING, "{}"))
+        val out = mutableMapOf<String, String>()
+        for (k in obj.keys()) out[k] = obj.getString(k)
+        return out
+    }
+
+    @Synchronized
+    fun removePendingCategory(ctx: Context, entryId: String) {
+        val obj = JSONObject(prefs(ctx).getString(KEY_PENDING, "{}"))
+        obj.remove(entryId)
+        prefs(ctx).edit().putString(KEY_PENDING, obj.toString()).apply()
     }
 
     /** Returns all queued entries and clears the queue. */

@@ -6,15 +6,17 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 
 object Notifier {
     const val TXN_CHANNEL = "transactions"
     const val MSG_CHANNEL = "messages"
+    const val KEY_CATEGORY_INPUT = "category"
 
-    // Quick actions shown on the transaction notification (Android caps
-    // notification actions at 3; tapping the body opens the app for the
-    // full category list).
-    private val quickCategories = listOf("Food & Dining", "Shopping", "Travel")
+    // Android caps notification actions at 3: two one-tap categories plus
+    // an "Other…" free-text field; tapping the body opens the app for the
+    // full category list.
+    private val quickCategories = listOf("Food & Dining", "Shopping")
 
     fun ensureChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -79,6 +81,26 @@ object Notifier {
             )
             builder.addAction(0, cat.substringBefore(" &"), pi)
         }
+
+        // Free-text category typed directly into the notification.
+        // RemoteInput requires a mutable PendingIntent.
+        val typePi = PendingIntent.getBroadcast(
+            ctx, notifId * 10 + 9,
+            Intent(ctx, CategoryActionReceiver::class.java).apply {
+                putExtra("entryId", entryId)
+                putExtra("notifId", notifId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+        builder.addAction(
+            NotificationCompat.Action.Builder(0, "Other…", typePi)
+                .addRemoteInput(
+                    RemoteInput.Builder(KEY_CATEGORY_INPUT)
+                        .setLabel("Type a category")
+                        .build()
+                )
+                .build()
+        )
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())

@@ -120,6 +120,17 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _smsEntryIdMeta = const VerificationMeta(
+    'smsEntryId',
+  );
+  @override
+  late final GeneratedColumn<String> smsEntryId = GeneratedColumn<String>(
+    'sms_entry_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _occurredAtMeta = const VerificationMeta(
     'occurredAt',
   );
@@ -169,6 +180,7 @@ class $TransactionsTable extends Transactions
     note,
     rawSms,
     smsSender,
+    smsEntryId,
     occurredAt,
     createdAt,
     synced,
@@ -239,6 +251,15 @@ class $TransactionsTable extends Transactions
       context.handle(
         _smsSenderMeta,
         smsSender.isAcceptableOrUnknown(data['sms_sender']!, _smsSenderMeta),
+      );
+    }
+    if (data.containsKey('sms_entry_id')) {
+      context.handle(
+        _smsEntryIdMeta,
+        smsEntryId.isAcceptableOrUnknown(
+          data['sms_entry_id']!,
+          _smsEntryIdMeta,
+        ),
       );
     }
     if (data.containsKey('occurred_at')) {
@@ -318,6 +339,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}sms_sender'],
       ),
+      smsEntryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sms_entry_id'],
+      ),
       occurredAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}occurred_at'],
@@ -360,6 +385,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// Raw SMS body this transaction was parsed from, if any.
   final String? rawSms;
   final String? smsSender;
+
+  /// Id of the native SMS queue entry this was parsed from, so category
+  /// picks made on the notification can find their transaction later.
+  final String? smsEntryId;
   final DateTime occurredAt;
   final DateTime createdAt;
 
@@ -377,6 +406,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.note,
     this.rawSms,
     this.smsSender,
+    this.smsEntryId,
     required this.occurredAt,
     required this.createdAt,
     required this.synced,
@@ -417,6 +447,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || smsSender != null) {
       map['sms_sender'] = Variable<String>(smsSender);
     }
+    if (!nullToAbsent || smsEntryId != null) {
+      map['sms_entry_id'] = Variable<String>(smsEntryId);
+    }
     map['occurred_at'] = Variable<DateTime>(occurredAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['synced'] = Variable<bool>(synced);
@@ -446,6 +479,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       smsSender: smsSender == null && nullToAbsent
           ? const Value.absent()
           : Value(smsSender),
+      smsEntryId: smsEntryId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(smsEntryId),
       occurredAt: Value(occurredAt),
       createdAt: Value(createdAt),
       synced: Value(synced),
@@ -473,6 +509,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       note: serializer.fromJson<String?>(json['note']),
       rawSms: serializer.fromJson<String?>(json['rawSms']),
       smsSender: serializer.fromJson<String?>(json['smsSender']),
+      smsEntryId: serializer.fromJson<String?>(json['smsEntryId']),
       occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       synced: serializer.fromJson<bool>(json['synced']),
@@ -497,6 +534,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'note': serializer.toJson<String?>(note),
       'rawSms': serializer.toJson<String?>(rawSms),
       'smsSender': serializer.toJson<String?>(smsSender),
+      'smsEntryId': serializer.toJson<String?>(smsEntryId),
       'occurredAt': serializer.toJson<DateTime>(occurredAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'synced': serializer.toJson<bool>(synced),
@@ -515,6 +553,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> note = const Value.absent(),
     Value<String?> rawSms = const Value.absent(),
     Value<String?> smsSender = const Value.absent(),
+    Value<String?> smsEntryId = const Value.absent(),
     DateTime? occurredAt,
     DateTime? createdAt,
     bool? synced,
@@ -530,6 +569,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     note: note.present ? note.value : this.note,
     rawSms: rawSms.present ? rawSms.value : this.rawSms,
     smsSender: smsSender.present ? smsSender.value : this.smsSender,
+    smsEntryId: smsEntryId.present ? smsEntryId.value : this.smsEntryId,
     occurredAt: occurredAt ?? this.occurredAt,
     createdAt: createdAt ?? this.createdAt,
     synced: synced ?? this.synced,
@@ -551,6 +591,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       note: data.note.present ? data.note.value : this.note,
       rawSms: data.rawSms.present ? data.rawSms.value : this.rawSms,
       smsSender: data.smsSender.present ? data.smsSender.value : this.smsSender,
+      smsEntryId: data.smsEntryId.present
+          ? data.smsEntryId.value
+          : this.smsEntryId,
       occurredAt: data.occurredAt.present
           ? data.occurredAt.value
           : this.occurredAt,
@@ -573,6 +616,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('note: $note, ')
           ..write('rawSms: $rawSms, ')
           ..write('smsSender: $smsSender, ')
+          ..write('smsEntryId: $smsEntryId, ')
           ..write('occurredAt: $occurredAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('synced: $synced')
@@ -593,6 +637,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     note,
     rawSms,
     smsSender,
+    smsEntryId,
     occurredAt,
     createdAt,
     synced,
@@ -612,6 +657,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.note == this.note &&
           other.rawSms == this.rawSms &&
           other.smsSender == this.smsSender &&
+          other.smsEntryId == this.smsEntryId &&
           other.occurredAt == this.occurredAt &&
           other.createdAt == this.createdAt &&
           other.synced == this.synced);
@@ -629,6 +675,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> note;
   final Value<String?> rawSms;
   final Value<String?> smsSender;
+  final Value<String?> smsEntryId;
   final Value<DateTime> occurredAt;
   final Value<DateTime> createdAt;
   final Value<bool> synced;
@@ -644,6 +691,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     this.rawSms = const Value.absent(),
     this.smsSender = const Value.absent(),
+    this.smsEntryId = const Value.absent(),
     this.occurredAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.synced = const Value.absent(),
@@ -660,6 +708,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     this.rawSms = const Value.absent(),
     this.smsSender = const Value.absent(),
+    this.smsEntryId = const Value.absent(),
     required DateTime occurredAt,
     this.createdAt = const Value.absent(),
     this.synced = const Value.absent(),
@@ -679,6 +728,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? note,
     Expression<String>? rawSms,
     Expression<String>? smsSender,
+    Expression<String>? smsEntryId,
     Expression<DateTime>? occurredAt,
     Expression<DateTime>? createdAt,
     Expression<bool>? synced,
@@ -695,6 +745,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (note != null) 'note': note,
       if (rawSms != null) 'raw_sms': rawSms,
       if (smsSender != null) 'sms_sender': smsSender,
+      if (smsEntryId != null) 'sms_entry_id': smsEntryId,
       if (occurredAt != null) 'occurred_at': occurredAt,
       if (createdAt != null) 'created_at': createdAt,
       if (synced != null) 'synced': synced,
@@ -713,6 +764,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? note,
     Value<String?>? rawSms,
     Value<String?>? smsSender,
+    Value<String?>? smsEntryId,
     Value<DateTime>? occurredAt,
     Value<DateTime>? createdAt,
     Value<bool>? synced,
@@ -729,6 +781,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       note: note ?? this.note,
       rawSms: rawSms ?? this.rawSms,
       smsSender: smsSender ?? this.smsSender,
+      smsEntryId: smsEntryId ?? this.smsEntryId,
       occurredAt: occurredAt ?? this.occurredAt,
       createdAt: createdAt ?? this.createdAt,
       synced: synced ?? this.synced,
@@ -775,6 +828,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (smsSender.present) {
       map['sms_sender'] = Variable<String>(smsSender.value);
     }
+    if (smsEntryId.present) {
+      map['sms_entry_id'] = Variable<String>(smsEntryId.value);
+    }
     if (occurredAt.present) {
       map['occurred_at'] = Variable<DateTime>(occurredAt.value);
     }
@@ -801,6 +857,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('note: $note, ')
           ..write('rawSms: $rawSms, ')
           ..write('smsSender: $smsSender, ')
+          ..write('smsEntryId: $smsEntryId, ')
           ..write('occurredAt: $occurredAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('synced: $synced')
@@ -1240,6 +1297,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> note,
       Value<String?> rawSms,
       Value<String?> smsSender,
+      Value<String?> smsEntryId,
       required DateTime occurredAt,
       Value<DateTime> createdAt,
       Value<bool> synced,
@@ -1257,6 +1315,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> note,
       Value<String?> rawSms,
       Value<String?> smsSender,
+      Value<String?> smsEntryId,
       Value<DateTime> occurredAt,
       Value<DateTime> createdAt,
       Value<bool> synced,
@@ -1325,6 +1384,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get smsSender => $composableBuilder(
     column: $table.smsSender,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get smsEntryId => $composableBuilder(
+    column: $table.smsEntryId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1408,6 +1472,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get smsEntryId => $composableBuilder(
+    column: $table.smsEntryId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
     column: $table.occurredAt,
     builder: (column) => ColumnOrderings(column),
@@ -1471,6 +1540,11 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get smsSender =>
       $composableBuilder(column: $table.smsSender, builder: (column) => column);
 
+  GeneratedColumn<String> get smsEntryId => $composableBuilder(
+    column: $table.smsEntryId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
     column: $table.occurredAt,
     builder: (column) => column,
@@ -1525,6 +1599,7 @@ class $$TransactionsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> rawSms = const Value.absent(),
                 Value<String?> smsSender = const Value.absent(),
+                Value<String?> smsEntryId = const Value.absent(),
                 Value<DateTime> occurredAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
@@ -1540,6 +1615,7 @@ class $$TransactionsTableTableManager
                 note: note,
                 rawSms: rawSms,
                 smsSender: smsSender,
+                smsEntryId: smsEntryId,
                 occurredAt: occurredAt,
                 createdAt: createdAt,
                 synced: synced,
@@ -1557,6 +1633,7 @@ class $$TransactionsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> rawSms = const Value.absent(),
                 Value<String?> smsSender = const Value.absent(),
+                Value<String?> smsEntryId = const Value.absent(),
                 required DateTime occurredAt,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
@@ -1572,6 +1649,7 @@ class $$TransactionsTableTableManager
                 note: note,
                 rawSms: rawSms,
                 smsSender: smsSender,
+                smsEntryId: smsEntryId,
                 occurredAt: occurredAt,
                 createdAt: createdAt,
                 synced: synced,
