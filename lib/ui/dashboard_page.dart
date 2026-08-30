@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
+import '../services/insights.dart';
+import 'budgets_page.dart';
 
 final _rupee = NumberFormat.currency(
     locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -134,6 +137,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               icon: Icons.credit_card,
               expand: false,
             ),
+            const SizedBox(height: 20),
+            _InsightsCard(
+              insights: Insights.forMonth(
+                  list, _allTime ? DateTime(now.year, now.month) : selected!),
+            ),
+            const SizedBox(height: 20),
+            _BudgetProgress(spendByCategory: byCategory),
+            const SizedBox(height: 20),
+            _TrendChart(totals: Insights.monthlyTotals(list)),
             const SizedBox(height: 24),
             if (byCategory.isNotEmpty) ...[
               Text('By category',
@@ -154,9 +166,286 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ),
                 ),
               ),
+            const SizedBox(height: 24),
+            _RecurringCard(items: Insights.recurring(list)),
+            const SizedBox(height: 24),
           ],
         );
       },
+    );
+  }
+}
+
+/// Plain-language observations about the selected month.
+class _InsightsCard extends StatelessWidget {
+  final List<Insight> insights;
+  const _InsightsCard({required this.insights});
+
+  @override
+  Widget build(BuildContext context) {
+    if (insights.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.insights, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text('Summary',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final i in insights)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5, right: 8),
+                      child: Icon(Icons.circle, size: 7,
+                          color: switch (i.tone) {
+                            InsightTone.good => Colors.green.shade600,
+                            InsightTone.warning => Colors.orange.shade700,
+                            InsightTone.neutral => scheme.outline,
+                          }),
+                    ),
+                    Expanded(child: Text(i.text)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Six-month spend trend, so direction is visible at a glance.
+class _TrendChart extends StatelessWidget {
+  final List<MapEntry<DateTime, double>> totals;
+  const _TrendChart({required this.totals});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = totals.fold<double>(0, (m, e) => e.value > m ? e.value : m);
+    if (maxY <= 0) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Last 6 months',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 160,
+              child: BarChart(
+                BarChartData(
+                  maxY: maxY * 1.2,
+                  borderData: FlBorderData(show: false),
+                  gridData: const FlGridData(show: false),
+                  titlesData: FlTitlesData(
+                    leftTitles: const AxisTitles(),
+                    topTitles: const AxisTitles(),
+                    rightTitles: const AxisTitles(),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final i = value.toInt();
+                          if (i < 0 || i >= totals.length) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              DateFormat('MMM').format(totals[i].key),
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, _, rod, _) => BarTooltipItem(
+                        _rupee.format(rod.toY),
+                        TextStyle(color: scheme.onInverseSurface),
+                      ),
+                    ),
+                  ),
+                  barGroups: [
+                    for (var i = 0; i < totals.length; i++)
+                      BarChartGroupData(x: i, barRods: [
+                        BarChartRodData(
+                          toY: totals[i].value,
+                          color: i == totals.length - 1
+                              ? scheme.primary
+                              : scheme.primary.withValues(alpha: 0.4),
+                          width: 18,
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4)),
+                        ),
+                      ]),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Budget bars for categories that have a limit set.
+class _BudgetProgress extends ConsumerWidget {
+  final Map<String, double> spendByCategory;
+  const _BudgetProgress({required this.spendByCategory});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgets = ref.watch(budgetsProvider).valueOrNull ?? const <Budget>[];
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Budgets',
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const BudgetsPage()),
+                  ),
+                  child: Text(budgets.isEmpty ? 'Set up' : 'Edit'),
+                ),
+              ],
+            ),
+            if (budgets.isEmpty)
+              Text(
+                'Set a monthly cap per category to get warned before you '
+                'overshoot.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
+            else
+              for (final b in budgets)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Builder(builder: (context) {
+                    final spent = spendByCategory[b.category] ?? 0;
+                    final ratio = b.monthlyLimit <= 0
+                        ? 0.0
+                        : (spent / b.monthlyLimit).clamp(0.0, 1.0);
+                    final over = spent > b.monthlyLimit;
+                    final near = !over && ratio >= 0.8;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Text(b.category)),
+                            Text(
+                              '${_rupee.format(spent)} / '
+                              '${_rupee.format(b.monthlyLimit)}',
+                              style: TextStyle(
+                                color: over
+                                    ? scheme.error
+                                    : near
+                                        ? Colors.orange.shade700
+                                        : null,
+                                fontWeight:
+                                    over || near ? FontWeight.w600 : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(
+                          value: ratio,
+                          color: over
+                              ? scheme.error
+                              : near
+                                  ? Colors.orange.shade700
+                                  : scheme.primary,
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Subscriptions and other regular charges found in the history.
+class _RecurringCard extends StatelessWidget {
+  final List<Recurring> items;
+  const _RecurringCard({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final monthly = items.fold<double>(
+        0,
+        (sum, r) =>
+            sum + (r.cadence == 'monthly' ? r.typicalAmount : 0));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recurring payments',
+                style: Theme.of(context).textTheme.titleMedium),
+            if (monthly > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '${_rupee.format(monthly)} a month in monthly charges',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            const SizedBox(height: 8),
+            for (final r in items)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.autorenew, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('${r.merchant} · ${r.cadence}',
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text(_rupee.format(r.typicalAmount),
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

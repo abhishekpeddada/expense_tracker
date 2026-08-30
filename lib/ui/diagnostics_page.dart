@@ -32,6 +32,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
     setState(() => _loading = true);
     final sms = ref.read(smsServiceProvider);
     final checks = await sms.diagnostics();
+    checks['notificationAccess'] = await sms.isNotificationAccessGranted;
     final log = await sms.receiveLog();
     if (!mounted) return;
     setState(() {
@@ -42,6 +43,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
   }
 
   static const _labels = {
+    'notificationAccess': 'Payment app notifications',
     'isDefaultSmsApp': 'Default SMS app',
     'batteryUnrestricted': 'Battery unrestricted',
     'receiveSms': 'Receive SMS permission',
@@ -97,7 +99,17 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                     title: Text(entry.value),
                     subtitle: (_checks[entry.key] ?? false)
                         ? null
-                        : const Text('Not granted — messages may be missed'),
+                        : Text(entry.key == 'notificationAccess'
+                            ? 'Off — transactions with no SMS will be missed. '
+                                'Tap to grant.'
+                            : 'Not granted — messages may be missed'),
+                    onTap: entry.key == 'notificationAccess'
+                        ? () async {
+                            await ref
+                                .read(smsServiceProvider)
+                                .openNotificationAccessSettings();
+                          }
+                        : null,
                   ),
                 const Divider(),
                 Padding(

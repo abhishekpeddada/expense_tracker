@@ -59,6 +59,15 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             onTap: () => _run(backup.exportAndShare),
           ),
           ListTile(
+            leading: const Icon(Icons.table_chart_outlined),
+            title: const Text('Export transactions as CSV'),
+            subtitle: const Text(
+                'For a spreadsheet. This is not a backup file - use the '
+                'export above if you want to restore into the app later'),
+            enabled: !_busy,
+            onTap: () => _run(backup.exportCsv),
+          ),
+          ListTile(
             leading: const Icon(Icons.restore),
             title: const Text('Restore from file'),
             subtitle: const Text(

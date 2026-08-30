@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -84,6 +84,52 @@ class BackupService {
         files: [XFile(file.path)],
         subject: 'Expense Tracker backup',
         text: 'Expense Tracker backup — save this to Google Drive.',
+      ),
+    );
+  }
+
+  /// Exports transactions as CSV for a spreadsheet, rather than the JSON
+  /// backup format which is meant for restoring into this app.
+  Future<void> exportCsv() async {
+    final txns = await (_db.select(_db.transactions)
+          ..orderBy([(t) => OrderingTerm.desc(t.occurredAt)]))
+        .get();
+
+    String cell(Object? v) {
+      final s = v?.toString() ?? '';
+      return s.contains(RegExp(r'[",\n]'))
+          ? '"${s.replaceAll('"', '""')}"'
+          : s;
+    }
+
+    final rows = <String>[
+      'Date,Type,Amount,Merchant,Category,Bank,Account,Note',
+      for (final t in txns)
+        [
+          t.occurredAt.toIso8601String(),
+          t.type.name,
+          t.amount.toStringAsFixed(2),
+          cell(t.merchant),
+          cell(t.category),
+          cell(t.bank),
+          cell(t.accountTail),
+          cell(t.note),
+        ].join(','),
+    ];
+
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .substring(0, 16)
+        .replaceAll(RegExp(r'[:T]'), '-');
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/expense-tracker-$stamp.csv');
+    await file.writeAsString(rows.join('\n'));
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'Expense Tracker transactions',
+        text: 'Transactions exported from Expense Tracker.',
       ),
     );
   }

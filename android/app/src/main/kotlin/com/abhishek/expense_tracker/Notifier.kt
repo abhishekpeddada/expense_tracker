@@ -11,6 +11,7 @@ import androidx.core.app.RemoteInput
 object Notifier {
     const val TXN_CHANNEL = "transactions"
     const val MSG_CHANNEL = "messages"
+    const val BUDGET_CHANNEL = "budgets"
     const val KEY_CATEGORY_INPUT = "category"
 
     // Android caps notification actions at 3: two one-tap categories plus
@@ -31,6 +32,12 @@ object Notifier {
                 MSG_CHANNEL, "Messages",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply { description = "Incoming SMS" }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(
+                BUDGET_CHANNEL, "Budget alerts",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Warnings when a category budget runs out" }
         )
     }
 
@@ -106,6 +113,29 @@ object Notifier {
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
+    }
+
+    /** Warning that a category budget is nearly or fully used. */
+    fun postBudgetAlert(ctx: Context, title: String, body: String) {
+        ensureChannels(ctx)
+        val openApp = PendingIntent.getActivity(
+            ctx, title.hashCode(),
+            Intent(ctx, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra("openTab", "dashboard")
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val n = NotificationCompat.Builder(ctx, BUDGET_CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(openApp)
+            .build()
+        ctx.getSystemService(NotificationManager::class.java)
+            .notify("budget".hashCode() + title.hashCode(), n)
     }
 
     /** Regular notification for a non-transaction SMS. */

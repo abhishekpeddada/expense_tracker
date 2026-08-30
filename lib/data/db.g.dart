@@ -1371,11 +1371,624 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsMessage> {
   }
 }
 
+class $CategoryRulesTable extends CategoryRules
+    with TableInfo<$CategoryRulesTable, CategoryRule> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CategoryRulesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _merchantKeyMeta = const VerificationMeta(
+    'merchantKey',
+  );
+  @override
+  late final GeneratedColumn<String> merchantKey = GeneratedColumn<String>(
+    'merchant_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hitsMeta = const VerificationMeta('hits');
+  @override
+  late final GeneratedColumn<int> hits = GeneratedColumn<int>(
+    'hits',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    merchantKey,
+    category,
+    hits,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'category_rules';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CategoryRule> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('merchant_key')) {
+      context.handle(
+        _merchantKeyMeta,
+        merchantKey.isAcceptableOrUnknown(
+          data['merchant_key']!,
+          _merchantKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_merchantKeyMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('hits')) {
+      context.handle(
+        _hitsMeta,
+        hits.isAcceptableOrUnknown(data['hits']!, _hitsMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CategoryRule map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CategoryRule(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      merchantKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merchant_key'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      hits: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hits'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CategoryRulesTable createAlias(String alias) {
+    return $CategoryRulesTable(attachedDatabase, alias);
+  }
+}
+
+class CategoryRule extends DataClass implements Insertable<CategoryRule> {
+  final int id;
+
+  /// Normalized merchant key (lowercased, noise stripped).
+  final String merchantKey;
+  final String category;
+
+  /// How many times the user has confirmed this pairing.
+  final int hits;
+  final DateTime updatedAt;
+  const CategoryRule({
+    required this.id,
+    required this.merchantKey,
+    required this.category,
+    required this.hits,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['merchant_key'] = Variable<String>(merchantKey);
+    map['category'] = Variable<String>(category);
+    map['hits'] = Variable<int>(hits);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CategoryRulesCompanion toCompanion(bool nullToAbsent) {
+    return CategoryRulesCompanion(
+      id: Value(id),
+      merchantKey: Value(merchantKey),
+      category: Value(category),
+      hits: Value(hits),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CategoryRule.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CategoryRule(
+      id: serializer.fromJson<int>(json['id']),
+      merchantKey: serializer.fromJson<String>(json['merchantKey']),
+      category: serializer.fromJson<String>(json['category']),
+      hits: serializer.fromJson<int>(json['hits']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'merchantKey': serializer.toJson<String>(merchantKey),
+      'category': serializer.toJson<String>(category),
+      'hits': serializer.toJson<int>(hits),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CategoryRule copyWith({
+    int? id,
+    String? merchantKey,
+    String? category,
+    int? hits,
+    DateTime? updatedAt,
+  }) => CategoryRule(
+    id: id ?? this.id,
+    merchantKey: merchantKey ?? this.merchantKey,
+    category: category ?? this.category,
+    hits: hits ?? this.hits,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CategoryRule copyWithCompanion(CategoryRulesCompanion data) {
+    return CategoryRule(
+      id: data.id.present ? data.id.value : this.id,
+      merchantKey: data.merchantKey.present
+          ? data.merchantKey.value
+          : this.merchantKey,
+      category: data.category.present ? data.category.value : this.category,
+      hits: data.hits.present ? data.hits.value : this.hits,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryRule(')
+          ..write('id: $id, ')
+          ..write('merchantKey: $merchantKey, ')
+          ..write('category: $category, ')
+          ..write('hits: $hits, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, merchantKey, category, hits, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CategoryRule &&
+          other.id == this.id &&
+          other.merchantKey == this.merchantKey &&
+          other.category == this.category &&
+          other.hits == this.hits &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CategoryRulesCompanion extends UpdateCompanion<CategoryRule> {
+  final Value<int> id;
+  final Value<String> merchantKey;
+  final Value<String> category;
+  final Value<int> hits;
+  final Value<DateTime> updatedAt;
+  const CategoryRulesCompanion({
+    this.id = const Value.absent(),
+    this.merchantKey = const Value.absent(),
+    this.category = const Value.absent(),
+    this.hits = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  CategoryRulesCompanion.insert({
+    this.id = const Value.absent(),
+    required String merchantKey,
+    required String category,
+    this.hits = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : merchantKey = Value(merchantKey),
+       category = Value(category);
+  static Insertable<CategoryRule> custom({
+    Expression<int>? id,
+    Expression<String>? merchantKey,
+    Expression<String>? category,
+    Expression<int>? hits,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (merchantKey != null) 'merchant_key': merchantKey,
+      if (category != null) 'category': category,
+      if (hits != null) 'hits': hits,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  CategoryRulesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? merchantKey,
+    Value<String>? category,
+    Value<int>? hits,
+    Value<DateTime>? updatedAt,
+  }) {
+    return CategoryRulesCompanion(
+      id: id ?? this.id,
+      merchantKey: merchantKey ?? this.merchantKey,
+      category: category ?? this.category,
+      hits: hits ?? this.hits,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (merchantKey.present) {
+      map['merchant_key'] = Variable<String>(merchantKey.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (hits.present) {
+      map['hits'] = Variable<int>(hits.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryRulesCompanion(')
+          ..write('id: $id, ')
+          ..write('merchantKey: $merchantKey, ')
+          ..write('category: $category, ')
+          ..write('hits: $hits, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BudgetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _monthlyLimitMeta = const VerificationMeta(
+    'monthlyLimit',
+  );
+  @override
+  late final GeneratedColumn<double> monthlyLimit = GeneratedColumn<double>(
+    'monthly_limit',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, category, monthlyLimit];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'budgets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Budget> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('monthly_limit')) {
+      context.handle(
+        _monthlyLimitMeta,
+        monthlyLimit.isAcceptableOrUnknown(
+          data['monthly_limit']!,
+          _monthlyLimitMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_monthlyLimitMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Budget map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Budget(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      monthlyLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}monthly_limit'],
+      )!,
+    );
+  }
+
+  @override
+  $BudgetsTable createAlias(String alias) {
+    return $BudgetsTable(attachedDatabase, alias);
+  }
+}
+
+class Budget extends DataClass implements Insertable<Budget> {
+  final int id;
+  final String category;
+  final double monthlyLimit;
+  const Budget({
+    required this.id,
+    required this.category,
+    required this.monthlyLimit,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['category'] = Variable<String>(category);
+    map['monthly_limit'] = Variable<double>(monthlyLimit);
+    return map;
+  }
+
+  BudgetsCompanion toCompanion(bool nullToAbsent) {
+    return BudgetsCompanion(
+      id: Value(id),
+      category: Value(category),
+      monthlyLimit: Value(monthlyLimit),
+    );
+  }
+
+  factory Budget.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Budget(
+      id: serializer.fromJson<int>(json['id']),
+      category: serializer.fromJson<String>(json['category']),
+      monthlyLimit: serializer.fromJson<double>(json['monthlyLimit']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'category': serializer.toJson<String>(category),
+      'monthlyLimit': serializer.toJson<double>(monthlyLimit),
+    };
+  }
+
+  Budget copyWith({int? id, String? category, double? monthlyLimit}) => Budget(
+    id: id ?? this.id,
+    category: category ?? this.category,
+    monthlyLimit: monthlyLimit ?? this.monthlyLimit,
+  );
+  Budget copyWithCompanion(BudgetsCompanion data) {
+    return Budget(
+      id: data.id.present ? data.id.value : this.id,
+      category: data.category.present ? data.category.value : this.category,
+      monthlyLimit: data.monthlyLimit.present
+          ? data.monthlyLimit.value
+          : this.monthlyLimit,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Budget(')
+          ..write('id: $id, ')
+          ..write('category: $category, ')
+          ..write('monthlyLimit: $monthlyLimit')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, category, monthlyLimit);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Budget &&
+          other.id == this.id &&
+          other.category == this.category &&
+          other.monthlyLimit == this.monthlyLimit);
+}
+
+class BudgetsCompanion extends UpdateCompanion<Budget> {
+  final Value<int> id;
+  final Value<String> category;
+  final Value<double> monthlyLimit;
+  const BudgetsCompanion({
+    this.id = const Value.absent(),
+    this.category = const Value.absent(),
+    this.monthlyLimit = const Value.absent(),
+  });
+  BudgetsCompanion.insert({
+    this.id = const Value.absent(),
+    required String category,
+    required double monthlyLimit,
+  }) : category = Value(category),
+       monthlyLimit = Value(monthlyLimit);
+  static Insertable<Budget> custom({
+    Expression<int>? id,
+    Expression<String>? category,
+    Expression<double>? monthlyLimit,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (category != null) 'category': category,
+      if (monthlyLimit != null) 'monthly_limit': monthlyLimit,
+    });
+  }
+
+  BudgetsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? category,
+    Value<double>? monthlyLimit,
+  }) {
+    return BudgetsCompanion(
+      id: id ?? this.id,
+      category: category ?? this.category,
+      monthlyLimit: monthlyLimit ?? this.monthlyLimit,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (monthlyLimit.present) {
+      map['monthly_limit'] = Variable<double>(monthlyLimit.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BudgetsCompanion(')
+          ..write('id: $id, ')
+          ..write('category: $category, ')
+          ..write('monthlyLimit: $monthlyLimit')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDb extends GeneratedDatabase {
   _$AppDb(QueryExecutor e) : super(e);
   $AppDbManager get managers => $AppDbManager(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $SmsMessagesTable smsMessages = $SmsMessagesTable(this);
+  late final $CategoryRulesTable categoryRules = $CategoryRulesTable(this);
+  late final $BudgetsTable budgets = $BudgetsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1383,6 +1996,8 @@ abstract class _$AppDb extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     transactions,
     smsMessages,
+    categoryRules,
+    budgets,
   ];
 }
 
@@ -2027,6 +2642,350 @@ typedef $$SmsMessagesTableProcessedTableManager =
       SmsMessage,
       PrefetchHooks Function()
     >;
+typedef $$CategoryRulesTableCreateCompanionBuilder =
+    CategoryRulesCompanion Function({
+      Value<int> id,
+      required String merchantKey,
+      required String category,
+      Value<int> hits,
+      Value<DateTime> updatedAt,
+    });
+typedef $$CategoryRulesTableUpdateCompanionBuilder =
+    CategoryRulesCompanion Function({
+      Value<int> id,
+      Value<String> merchantKey,
+      Value<String> category,
+      Value<int> hits,
+      Value<DateTime> updatedAt,
+    });
+
+class $$CategoryRulesTableFilterComposer
+    extends Composer<_$AppDb, $CategoryRulesTable> {
+  $$CategoryRulesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get merchantKey => $composableBuilder(
+    column: $table.merchantKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hits => $composableBuilder(
+    column: $table.hits,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CategoryRulesTableOrderingComposer
+    extends Composer<_$AppDb, $CategoryRulesTable> {
+  $$CategoryRulesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get merchantKey => $composableBuilder(
+    column: $table.merchantKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hits => $composableBuilder(
+    column: $table.hits,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CategoryRulesTableAnnotationComposer
+    extends Composer<_$AppDb, $CategoryRulesTable> {
+  $$CategoryRulesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get merchantKey => $composableBuilder(
+    column: $table.merchantKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<int> get hits =>
+      $composableBuilder(column: $table.hits, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CategoryRulesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDb,
+          $CategoryRulesTable,
+          CategoryRule,
+          $$CategoryRulesTableFilterComposer,
+          $$CategoryRulesTableOrderingComposer,
+          $$CategoryRulesTableAnnotationComposer,
+          $$CategoryRulesTableCreateCompanionBuilder,
+          $$CategoryRulesTableUpdateCompanionBuilder,
+          (
+            CategoryRule,
+            BaseReferences<_$AppDb, $CategoryRulesTable, CategoryRule>,
+          ),
+          CategoryRule,
+          PrefetchHooks Function()
+        > {
+  $$CategoryRulesTableTableManager(_$AppDb db, $CategoryRulesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CategoryRulesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CategoryRulesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CategoryRulesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> merchantKey = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<int> hits = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => CategoryRulesCompanion(
+                id: id,
+                merchantKey: merchantKey,
+                category: category,
+                hits: hits,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String merchantKey,
+                required String category,
+                Value<int> hits = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => CategoryRulesCompanion.insert(
+                id: id,
+                merchantKey: merchantKey,
+                category: category,
+                hits: hits,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CategoryRulesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDb,
+      $CategoryRulesTable,
+      CategoryRule,
+      $$CategoryRulesTableFilterComposer,
+      $$CategoryRulesTableOrderingComposer,
+      $$CategoryRulesTableAnnotationComposer,
+      $$CategoryRulesTableCreateCompanionBuilder,
+      $$CategoryRulesTableUpdateCompanionBuilder,
+      (
+        CategoryRule,
+        BaseReferences<_$AppDb, $CategoryRulesTable, CategoryRule>,
+      ),
+      CategoryRule,
+      PrefetchHooks Function()
+    >;
+typedef $$BudgetsTableCreateCompanionBuilder = BudgetsCompanion Function({
+  Value<int> id,
+  required String category,
+  required double monthlyLimit,
+});
+typedef $$BudgetsTableUpdateCompanionBuilder = BudgetsCompanion Function({
+  Value<int> id,
+  Value<String> category,
+  Value<double> monthlyLimit,
+});
+
+class $$BudgetsTableFilterComposer extends Composer<_$AppDb, $BudgetsTable> {
+  $$BudgetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get monthlyLimit => $composableBuilder(
+    column: $table.monthlyLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BudgetsTableOrderingComposer extends Composer<_$AppDb, $BudgetsTable> {
+  $$BudgetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get monthlyLimit => $composableBuilder(
+    column: $table.monthlyLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BudgetsTableAnnotationComposer
+    extends Composer<_$AppDb, $BudgetsTable> {
+  $$BudgetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<double> get monthlyLimit => $composableBuilder(
+    column: $table.monthlyLimit,
+    builder: (column) => column,
+  );
+}
+
+class $$BudgetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDb,
+          $BudgetsTable,
+          Budget,
+          $$BudgetsTableFilterComposer,
+          $$BudgetsTableOrderingComposer,
+          $$BudgetsTableAnnotationComposer,
+          $$BudgetsTableCreateCompanionBuilder,
+          $$BudgetsTableUpdateCompanionBuilder,
+          (Budget, BaseReferences<_$AppDb, $BudgetsTable, Budget>),
+          Budget,
+          PrefetchHooks Function()
+        > {
+  $$BudgetsTableTableManager(_$AppDb db, $BudgetsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BudgetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BudgetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BudgetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<double> monthlyLimit = const Value.absent(),
+              }) => BudgetsCompanion(
+                id: id,
+                category: category,
+                monthlyLimit: monthlyLimit,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String category,
+                required double monthlyLimit,
+              }) => BudgetsCompanion.insert(
+                id: id,
+                category: category,
+                monthlyLimit: monthlyLimit,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BudgetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDb,
+      $BudgetsTable,
+      Budget,
+      $$BudgetsTableFilterComposer,
+      $$BudgetsTableOrderingComposer,
+      $$BudgetsTableAnnotationComposer,
+      $$BudgetsTableCreateCompanionBuilder,
+      $$BudgetsTableUpdateCompanionBuilder,
+      (Budget, BaseReferences<_$AppDb, $BudgetsTable, Budget>),
+      Budget,
+      PrefetchHooks Function()
+    >;
 
 class $AppDbManager {
   final _$AppDb _db;
@@ -2035,4 +2994,8 @@ class $AppDbManager {
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$SmsMessagesTableTableManager get smsMessages =>
       $$SmsMessagesTableTableManager(_db, _db.smsMessages);
+  $$CategoryRulesTableTableManager get categoryRules =>
+      $$CategoryRulesTableTableManager(_db, _db.categoryRules);
+  $$BudgetsTableTableManager get budgets =>
+      $$BudgetsTableTableManager(_db, _db.budgets);
 }

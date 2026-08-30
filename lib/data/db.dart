@@ -51,7 +51,28 @@ class SmsMessages extends Table {
   BoolColumn get outgoing => boolean().withDefault(const Constant(false))();
 }
 
-@DriftDatabase(tables: [Transactions, SmsMessages])
+/// Remembers that a merchant belongs to a category, so the same merchant is
+/// categorized automatically next time. Learned from the user's own picks.
+class CategoryRules extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Normalized merchant key (lowercased, noise stripped).
+  TextColumn get merchantKey => text().unique()();
+  TextColumn get category => text()();
+
+  /// How many times the user has confirmed this pairing.
+  IntColumn get hits => integer().withDefault(const Constant(1))();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Monthly spending cap for a category.
+class Budgets extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get category => text().unique()();
+  RealColumn get monthlyLimit => real()();
+}
+
+@DriftDatabase(tables: [Transactions, SmsMessages, CategoryRules, Budgets])
 class AppDb extends _$AppDb {
   AppDb() : super(driftDatabase(name: 'expense_tracker'));
 
@@ -59,7 +80,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -72,6 +93,10 @@ class AppDb extends _$AppDb {
           }
           if (from < 4) {
             await m.addColumn(transactions, transactions.balance);
+          }
+          if (from < 5) {
+            await m.createTable(categoryRules);
+            await m.createTable(budgets);
           }
         },
       );
@@ -154,6 +179,114 @@ class AppDb extends _$AppDb {
       ..limit(1);
     return (await q.get()).isNotEmpty;
   }
+
+  Future<void> deleteMessage(int id) =>
+      (delete(smsMessages)..where((m) => m.id.equals(id))).go();
+
+  /// Removes an entire conversation.
+  Future<void> deleteThread(String sender) =>
+      (delete(smsMessages)..where((m) => m.sender.equals(sender))).go();
+
+  /// Marks the newest incoming message of a thread unread again.
+  Future<void> markThreadUnread(String sender) async {
+    final newest = await (select(smsMessages)
+          ..where((m) => m.sender.equals(sender) & m.outgoing.equals(false))
+          ..orderBy([(m) => OrderingTerm.desc(m.receivedAt)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (newest == null) return;
+    await (update(smsMessages)..where((m) => m.id.equals(newest.id)))
+        .write(const SmsMessagesCompanion(read: Value(false)));
+  }
+
+  // ---- Category rules (learned auto-categorization) ----
+
+  Future<String?> categoryForMerchant(String merchantKey) async {
+    final row = await (select(categoryRules)
+          ..where((r) => r.merchantKey.equals(merchantKey))
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.category;
+  }
+
+  /// Records (or reinforces) that a merchant maps to a category.
+  Future<void> rememberCategory(String merchantKey, String category) async {
+    final existing = await (select(categoryRules)
+          ..where((r) => r.merchantKey.equals(merchantKey))
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing == null) {
+      await into(categoryRules).insert(CategoryRulesCompanion.insert(
+        merchantKey: merchantKey,
+        category: category,
+      ));
+    } else {
+      await (update(categoryRules)..where((r) => r.id.equals(existing.id)))
+          .write(CategoryRulesCompanion(
+        category: Value(category),
+        // A changed category restarts the count; the newest pick wins.
+        hits: Value(existing.category == category ? existing.hits + 1 : 1),
+        updatedAt: Value(DateTime.now()),
+      ));
+    }
+  }
+
+  Stream<List<CategoryRule>> watchCategoryRules() => (select(categoryRules)
+        ..orderBy([(r) => OrderingTerm.desc(r.hits)]))
+      .watch();
+
+  Future<void> deleteCategoryRule(int id) =>
+      (delete(categoryRules)..where((r) => r.id.equals(id))).go();
+
+  // ---- Budgets ----
+
+  Stream<List<Budget>> watchBudgets() => select(budgets).watch();
+  Future<List<Budget>> allBudgets() => select(budgets).get();
+
+  Future<void> setBudget(String category, double limit) async {
+    final existing = await (select(budgets)
+          ..where((b) => b.category.equals(category))
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing == null) {
+      await into(budgets).insert(
+          BudgetsCompanion.insert(category: category, monthlyLimit: limit));
+    } else {
+      await (update(budgets)..where((b) => b.id.equals(existing.id)))
+          .write(BudgetsCompanion(monthlyLimit: Value(limit)));
+    }
+  }
+
+  Future<void> deleteBudget(String category) =>
+      (delete(budgets)..where((b) => b.category.equals(category))).go();
+
+  // ---- Transaction editing ----
+
+  Future<void> updateTransaction(
+    int id, {
+    required double amount,
+    required TxnType type,
+    required AccountKind accountKind,
+    String? merchant,
+    String? bank,
+    String? accountTail,
+    String? category,
+    String? note,
+    required DateTime occurredAt,
+  }) =>
+      (update(transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(
+          amount: Value(amount),
+          type: Value(type),
+          accountKind: Value(accountKind),
+          merchant: Value(merchant),
+          bank: Value(bank),
+          accountTail: Value(accountTail),
+          category: Value(category),
+          note: Value(note),
+          occurredAt: Value(occurredAt),
+        ),
+      );
 
   /// Marks all incoming messages from a sender as read.
   Future<void> markThreadRead(String sender) => (update(smsMessages)

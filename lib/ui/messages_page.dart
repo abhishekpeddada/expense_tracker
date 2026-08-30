@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../data/db.dart';
 import '../data/providers.dart';
 import '../services/sms_service.dart';
+import 'compose_page.dart';
 import 'thread_page.dart';
 
 final _dateFmt = DateFormat('d MMM, h:mm a');
@@ -118,7 +119,15 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
       },
     );
 
-    return Column(
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ComposePage()),
+        ),
+        child: const Icon(Icons.edit_outlined),
+      ),
+      body: Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -164,8 +173,64 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
           ),
         Expanded(child: body),
       ],
+      ),
     );
   }
+}
+
+/// Long-press menu on a conversation: mark unread or delete.
+Future<void> _conversationActions(
+  BuildContext context,
+  WidgetRef ref,
+  _Conversation c,
+  String name,
+) {
+  final db = ref.read(dbProvider);
+  return showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.mark_email_unread_outlined),
+            title: const Text('Mark as unread'),
+            onTap: () async {
+              await db.markThreadUnread(c.sender);
+              if (sheetContext.mounted) Navigator.pop(sheetContext);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: Text('Delete conversation with $name'),
+            subtitle: Text('${c.count} message${c.count == 1 ? '' : 's'}'),
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: sheetContext,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Delete conversation?'),
+                  content: const Text(
+                      'The messages are removed from this app. Transactions '
+                      'already recorded from them are kept.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Delete')),
+                  ],
+                ),
+              );
+              if (ok == true) await db.deleteThread(c.sender);
+              if (sheetContext.mounted) Navigator.pop(sheetContext);
+            },
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ConversationTile extends ConsumerWidget {
@@ -243,6 +308,7 @@ class _ConversationTile extends ConsumerWidget {
           builder: (_) => ThreadPage(sender: c.sender, displayName: name),
         ),
       ),
+      onLongPress: () => _conversationActions(context, ref, c, name),
     );
   }
 }

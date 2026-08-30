@@ -78,6 +78,26 @@ class SmsService {
     }
   }
 
+  /// Whether the user has granted notification access, which the listener
+  /// needs in order to see payment-app notifications.
+  Future<bool> get isNotificationAccessGranted async {
+    try {
+      return await _channel
+              .invokeMethod<bool>('isNotificationAccessGranted') ??
+          false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  Future<void> openNotificationAccessSettings() async {
+    try {
+      await _channel.invokeMethod('openNotificationAccessSettings');
+    } on MissingPluginException {
+      // ignore off-Android
+    }
+  }
+
   Future<void> clearReceiveLog() async {
     try {
       await _channel.invokeMethod('clearReceiveLog');
@@ -126,6 +146,18 @@ class SmsService {
     for (final e in entries) {
       final m = (e as Map).cast<String, Object?>();
       try {
+        if (m['fromNotification'] == true) {
+          await ingestNotification(
+            _db,
+            source: m['sender'] as String? ?? 'Payment app',
+            body: m['body'] as String? ?? '',
+            at: DateTime.fromMillisecondsSinceEpoch(
+                (m['ts'] as num?)?.toInt() ??
+                    DateTime.now().millisecondsSinceEpoch),
+            smsEntryId: m['id'] as String?,
+          );
+          continue;
+        }
         final result = await ingestSms(
           _db,
           sender: m['sender'] as String? ?? 'Unknown',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/providers.dart';
+import 'services/budget_alerts.dart';
 import 'services/sms_service.dart';
 import 'ui/accounts_page.dart';
 import 'ui/backup_page.dart';
@@ -100,6 +101,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final sms = ref.read(smsServiceProvider);
     sms.requestPermissions();
     sms.drainQueue();
+    BudgetAlerts(ref.read(dbProvider)).check();
   }
 
   @override
@@ -113,6 +115,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (state == AppLifecycleState.resumed) {
       ref.read(smsServiceProvider).drainQueue();
       ref.invalidate(isDefaultSmsAppProvider);
+      BudgetAlerts(ref.read(dbProvider)).check();
     }
   }
 

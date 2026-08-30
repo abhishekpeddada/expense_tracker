@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the changelog can diff tags
 
       - uses: actions/setup-java@v4
         with:
@@ -59,16 +61,37 @@ jobs:
             mv "$f" "expense-tracker-${f#app-}"
           done
           ls -la
+      - name: Build changelog
+        run: |
+          PREV=$(git tag -l 'build-*' --sort=-v:refname | head -n 1)
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty=format:'- %s' "$PREV"..HEAD
+            else
+              git log --no-merges --pretty=format:'- %s' -20
+            fi
+            echo
+            echo
+            echo "## Downloads"
+            echo
+            echo "- arm64-v8a - most phones from 2017 onwards, pick this one"
+            echo "- armeabi-v7a - older 32-bit phones"
+            echo "- x86_64 - emulators"
+            echo
+            if [ -n "$PREV" ]; then
+              echo "Built from ${GITHUB_SHA}. Previous release: ${PREV}."
+            else
+              echo "Built from ${GITHUB_SHA}."
+            fi
+          } > CHANGELOG_RELEASE.md
+          cat CHANGELOG_RELEASE.md
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: "Expense Tracker build ${{ github.run_number }}"
-          body: |
-            Split APKs built from ${{ github.sha }}.
-
-            - **arm64-v8a** — most phones from ~2017 onwards (pick this one)
-            - **armeabi-v7a** — older 32-bit phones
-            - **x86_64** — emulators
+          body_path: CHANGELOG_RELEASE.md
           files: build/app/outputs/flutter-apk/expense-tracker-*.apk

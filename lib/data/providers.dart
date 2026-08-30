@@ -2,7 +2,9 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
+import '../parsing/merchant.dart';
 import '../parsing/sms_parser.dart';
+import '../services/categorization.dart';
 import 'db.dart';
 
 final dbProvider = Provider<AppDb>((ref) {
@@ -21,6 +23,18 @@ final uncategorizedProvider = StreamProvider<List<Transaction>>(
 
 final messagesProvider = StreamProvider<List<SmsMessage>>(
   (ref) => ref.watch(dbProvider).watchMessages(),
+);
+
+final categorizerProvider = Provider<Categorizer>(
+  (ref) => Categorizer(ref.watch(dbProvider)),
+);
+
+final categoryRulesProvider = StreamProvider<List<CategoryRule>>(
+  (ref) => ref.watch(dbProvider).watchCategoryRules(),
+);
+
+final budgetsProvider = StreamProvider<List<Budget>>(
+  (ref) => ref.watch(dbProvider).watchBudgets(),
 );
 
 /// A bank account / credit card derived from transaction data. There is no
@@ -91,6 +105,36 @@ class IngestResult {
   const IngestResult(this.parsed, this.txnId);
 }
 
+/// Records a transaction seen in another app's notification. No SMS row is
+/// created — there was no message, only a notification.
+Future<int?> ingestNotification(
+  AppDb db, {
+  required String source,
+  required String body,
+  required DateTime at,
+  String? smsEntryId,
+}) async {
+  final parsed = SmsParser.parse(body, sender: source);
+  if (parsed == null) return null;
+  if (await db.hasSimilarTransaction(at, parsed.amount, parsed.type,
+      MerchantName.display(parsed.merchant))) {
+    return null;
+  }
+  return db.insertTransaction(TransactionsCompanion.insert(
+    amount: parsed.amount,
+    type: parsed.type,
+    accountKind: parsed.accountKind,
+    accountTail: Value(parsed.accountTail),
+    merchant: Value(MerchantName.display(parsed.merchant)),
+    bank: Value(parsed.bank ?? source),
+    smsSender: Value(source),
+    smsEntryId: Value(smsEntryId),
+    balance: Value(parsed.balance),
+    category: Value(await Categorizer(db).learnedCategory(parsed.merchant)),
+    occurredAt: at,
+  ));
+}
+
 /// Ingests an incoming SMS: stores it for the Messages tab and, when it
 /// parses as a transaction, records the transaction as uncategorized.
 Future<IngestResult> ingestSms(
@@ -117,12 +161,13 @@ Future<IngestResult> ingestSms(
       type: parsed.type,
       accountKind: parsed.accountKind,
       accountTail: Value(parsed.accountTail),
-      merchant: Value(parsed.merchant),
+      merchant: Value(MerchantName.display(parsed.merchant)),
       bank: Value(parsed.bank),
       rawSms: Value(body),
       smsSender: Value(sender),
       smsEntryId: Value(smsEntryId),
       balance: Value(parsed.balance),
+      category: Value(await Categorizer(db).learnedCategory(parsed.merchant)),
       occurredAt: at,
     ));
   }

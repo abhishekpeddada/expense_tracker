@@ -77,6 +77,35 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
                   style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Delete conversation',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Delete conversation?'),
+                  content: const Text(
+                      'The messages are removed from this app. Transactions '
+                      'already recorded from them are kept.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Delete')),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              await ref.read(dbProvider).deleteThread(widget.sender);
+              navigator.pop();
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
