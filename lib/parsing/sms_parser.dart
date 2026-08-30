@@ -45,6 +45,16 @@ class SmsParser {
     caseSensitive: false,
   );
 
+  /// Many banks (SBI's UPI alerts especially) state the amount with no
+  /// currency symbol at all: "A/C X5942 debited by 1.00". Fall back to the
+  /// number sitting next to the debit/credit verb.
+  static final _amountNearVerbRe = RegExp(
+    r'\b(?:debited|credited|spent|paid|sent|withdrawn|deducted|received|'
+    r'debit|credit)\s*(?:by|for|with|of|:)?\s*'
+    r'(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\b',
+    caseSensitive: false,
+  );
+
   static final _debitRe = RegExp(
     r'\b(debited|spent|paid|withdrawn|purchase(?:\s+of)?|sent|deducted)\b',
     caseSensitive: false,
@@ -86,12 +96,12 @@ class SmsParser {
   );
 
   static final _merchantToRe = RegExp(
-    r'\b(?:to|towards)\s+(?:vpa\s+)?([A-Za-z0-9][A-Za-z0-9 @._\-]{2,40}?)(?=\s+on\b|\s+via\b|\s+ref\b|\.\s|\.$|,|$)',
+    r'\b(?:to|towards)\s+(?:vpa\s+)?([A-Za-z0-9][A-Za-z0-9 @._\-]{2,40}?)(?=\s+on\b|\s+via\b|\s+ref|\s+upi\b|\.\s|\.$|,|$)',
     caseSensitive: false,
   );
 
   static final _merchantFromRe = RegExp(
-    r'\bfrom\s+(?:vpa\s+)?([A-Za-z0-9][A-Za-z0-9 @._\-]{2,40}?)(?=\s+on\b|\s+via\b|\s+ref\b|\.\s|\.$|,|$)',
+    r'\bfrom\s+(?:vpa\s+)?([A-Za-z0-9][A-Za-z0-9 @._\-]{2,40}?)(?=\s+on\b|\s+via\b|\s+ref|\s+upi\b|\.\s|\.$|,|$)',
     caseSensitive: false,
   );
 
@@ -117,7 +127,8 @@ class SmsParser {
 
     if (_rejectRe.hasMatch(text)) return null;
 
-    final amountMatch = _amountRe.firstMatch(text);
+    final amountMatch =
+        _amountRe.firstMatch(text) ?? _amountNearVerbRe.firstMatch(text);
     if (amountMatch == null) return null;
     final amount = double.tryParse(amountMatch.group(1)!.replaceAll(',', ''));
     if (amount == null || amount <= 0) return null;

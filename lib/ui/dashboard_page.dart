@@ -9,21 +9,50 @@ import '../models/models.dart';
 final _rupee = NumberFormat.currency(
     locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
-class DashboardPage extends ConsumerWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  /// Selected period as (year, month); null month means the whole year,
+  /// null selection means every transaction ever recorded.
+  DateTime? _month = DateTime(DateTime.now().year, DateTime.now().month);
+  bool _allTime = false;
+
+  @override
+  Widget build(BuildContext context) {
     final txns = ref.watch(transactionsProvider);
     return txns.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (list) {
+        // Months that actually have data, newest first — history is never
+        // deleted, so past months stay selectable forever.
+        final months = <DateTime>{
+          for (final t in list) DateTime(t.occurredAt.year, t.occurredAt.month),
+        }.toList()
+          ..sort((a, b) => b.compareTo(a));
+
         final now = DateTime.now();
-        final monthTxns = list
-            .where((t) =>
-                t.occurredAt.year == now.year && t.occurredAt.month == now.month)
-            .toList();
+        final thisMonth = DateTime(now.year, now.month);
+        if (!months.contains(thisMonth)) months.insert(0, thisMonth);
+
+        // Keep the selection valid if the chosen month scrolled out of data.
+        var selected = _month;
+        if (!_allTime && (selected == null || !months.contains(selected))) {
+          selected = months.first;
+        }
+
+        final monthTxns = _allTime
+            ? list
+            : list
+                .where((t) =>
+                    t.occurredAt.year == selected!.year &&
+                    t.occurredAt.month == selected.month)
+                .toList();
 
         double spent = 0, received = 0, ccSpent = 0;
         final byCategory = <String, double>{};
@@ -44,8 +73,45 @@ class DashboardPage extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(DateFormat('MMMM yyyy').format(now),
-                style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _allTime
+                        ? 'All time'
+                        : DateFormat('MMMM yyyy').format(selected!),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                DropdownButton<String>(
+                  value: _allTime ? 'all' : selected!.toIso8601String(),
+                  underline: const SizedBox.shrink(),
+                  borderRadius: BorderRadius.circular(12),
+                  items: [
+                    for (final m in months)
+                      DropdownMenuItem(
+                        value: m.toIso8601String(),
+                        child: Text(DateFormat('MMM yyyy').format(m)),
+                      ),
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('All time'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      if (v == 'all') {
+                        _allTime = true;
+                      } else {
+                        _allTime = false;
+                        _month = DateTime.parse(v);
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -81,7 +147,9 @@ class DashboardPage extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 32),
                 child: Center(
                   child: Text(
-                    'No spending recorded this month yet.',
+                    _allTime
+                        ? 'No spending recorded yet.'
+                        : 'No spending recorded for this month.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),

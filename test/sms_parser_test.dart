@@ -118,6 +118,57 @@ void main() {
     });
   });
 
+  group('SmsParser.parse without a currency symbol', () {
+    // Real SBI UPI alert: states the amount as "debited by 1.00" with no
+    // Rs/INR/₹ anywhere, which the currency-prefixed pattern cannot see.
+    const sbiDebit =
+        'Dear UPI user A/C X5942 debited by 1.00 on date 25Aug26 trf to '
+        'PEDDADA  VIVEK Refno 660321247164 If not u? call-1800111109 for '
+        'other services-18001234-SBI';
+
+    test('SBI UPI debit with no currency symbol', () {
+      final t = SmsParser.parse(sbiDebit, sender: 'AD-SBIUPI');
+      expect(t, isNotNull);
+      expect(t!.amount, 1.00);
+      expect(t.type, TxnType.debit);
+      expect(t.accountTail, '5942');
+      expect(t.bank, 'SBI');
+      expect(t.merchant, contains('PEDDADA'));
+    });
+
+    test('SBI UPI credit with no currency symbol', () {
+      final t = SmsParser.parse(
+        'Dear UPI user A/C X5942 credited by 500.00 on date 25Aug26 by '
+        'PEDDADA VIVEK Refno 660321247164 -SBI',
+        sender: 'AD-SBIUPI',
+      );
+      expect(t, isNotNull);
+      expect(t!.amount, 500.00);
+      expect(t.type, TxnType.credit);
+    });
+
+    test('amount adjacent to verb without connector word', () {
+      final t = SmsParser.parse('Your a/c XX1234 debited 250.50 at STORE');
+      expect(t, isNotNull);
+      expect(t!.amount, 250.50);
+      expect(t.type, TxnType.debit);
+    });
+
+    test('a date after the verb is not read as an amount', () {
+      final t = SmsParser.parse(
+        'Your a/c XX1234 credited on 25Aug26 with salary',
+      );
+      expect(t, isNull);
+    });
+
+    test('OTP with a bare number is still rejected', () {
+      final t = SmsParser.parse(
+        '123456 is your OTP. Do not share. Amount debited 5000 pending.',
+      );
+      expect(t, isNull);
+    });
+  });
+
   group('SmsParser.suggestCategory', () {
     ParsedTransaction debitAt(String merchant) => ParsedTransaction(
           amount: 100,

@@ -20,11 +20,25 @@ class _Conversation {
 }
 
 /// SMS inbox grouped into one conversation per sender.
-class MessagesPage extends ConsumerWidget {
+class MessagesPage extends ConsumerStatefulWidget {
   const MessagesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MessagesPage> createState() => _MessagesPageState();
+}
+
+class _MessagesPageState extends ConsumerState<MessagesPage> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final msgs = ref.watch(messagesProvider);
     final isDefault = ref.watch(isDefaultSmsAppProvider).valueOrNull ?? true;
 
@@ -57,10 +71,31 @@ class MessagesPage extends ConsumerWidget {
           );
         }
 
+        // Search matches the sender or anything in the message text, so a
+        // conversation surfaces even when only one old message matches.
+        final q = _query.trim().toLowerCase();
+        final filtered = q.isEmpty
+            ? list
+            : list
+                .where((m) =>
+                    m.sender.toLowerCase().contains(q) ||
+                    m.body.toLowerCase().contains(q))
+                .toList();
+
+        if (filtered.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text('No messages match "$_query"',
+                  style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          );
+        }
+
         // list is newest-first, so the first message seen per sender is the
         // conversation preview.
         final bySender = <String, List<SmsMessage>>{};
-        for (final m in list) {
+        for (final m in filtered) {
           bySender.putIfAbsent(m.sender, () => []).add(m);
         }
         final conversations = [
@@ -85,6 +120,31 @@ class MessagesPage extends ConsumerWidget {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => _query = v),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search messages',
+              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+              ),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+            ),
+          ),
+        ),
         if (!isDefault)
           MaterialBanner(
             content: const Text(

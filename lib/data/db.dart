@@ -144,6 +144,17 @@ class AppDb extends _$AppDb {
   Future<int> insertMessage(SmsMessagesCompanion msg) =>
       into(smsMessages).insert(msg);
 
+  /// Duplicate check used when restoring a backup.
+  Future<bool> hasMessage(String sender, String body, DateTime at) async {
+    final q = select(smsMessages)
+      ..where((m) =>
+          m.sender.equals(sender) &
+          m.body.equals(body) &
+          m.receivedAt.equals(at))
+      ..limit(1);
+    return (await q.get()).isNotEmpty;
+  }
+
   /// Marks all incoming messages from a sender as read.
   Future<void> markThreadRead(String sender) => (update(smsMessages)
         ..where((m) =>

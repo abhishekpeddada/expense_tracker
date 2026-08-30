@@ -26,16 +26,24 @@ class SmsReceiver : BroadcastReceiver() {
         val entryId = UUID.randomUUID().toString()
 
         val preview = if (body.length > 60) body.take(60) + "…" else body
-        if (!runCatching { SmsQueue.markSeen(context, sender, body, ts) }
-                .getOrDefault(true)) {
-            return // already handled via SMS_RECEIVED
-        }
-        runCatching {
-            SmsQueue.add(context, entryId, sender, body, ts)
-            SmsQueue.log(context, "received from $sender: $preview")
-        }.onFailure {
-            Log.e(TAG, "queue add failed", it)
-            runCatching { SmsQueue.log(context, "QUEUE FAILED from $sender: $it") }
+        // Only the queue and notification are deduplicated; the provider
+        // write below is this app's duty as default handler and must happen
+        // regardless of which receiver saw the message first.
+        val isNew = runCatching { SmsQueue.markSeen(context, sender, body, ts) }
+            .getOrDefault(true)
+
+        if (isNew) {
+            runCatching {
+                SmsQueue.add(context, entryId, sender, body, ts)
+                SmsQueue.log(context, "SMS_DELIVER from $sender: $preview")
+            }.onFailure {
+                Log.e(TAG, "queue add failed", it)
+                runCatching { SmsQueue.log(context, "QUEUE FAILED from $sender: $it") }
+            }
+        } else {
+            runCatching {
+                SmsQueue.log(context, "SMS_DELIVER from $sender (already queued)")
+            }
         }
 
         // The default SMS app is responsible for writing incoming messages
@@ -54,6 +62,8 @@ class SmsReceiver : BroadcastReceiver() {
             Log.e(TAG, "telephony provider write failed", it)
             runCatching { SmsQueue.log(context, "provider write failed: $it") }
         }
+
+        if (!isNew) return
 
         runCatching {
             val gate = TxnGate.check(body)

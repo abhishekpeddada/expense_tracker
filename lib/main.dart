@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'data/providers.dart';
 import 'services/sms_service.dart';
 import 'ui/accounts_page.dart';
+import 'ui/backup_page.dart';
 import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/messages_page.dart';
@@ -133,6 +134,14 @@ class _HomeShellState extends ConsumerState<HomeShell>
                 MaterialPageRoute(builder: (_) => const DiagnosticsPage()),
               ),
             ),
+          IconButton(
+            tooltip: 'Backup & restore',
+            icon: const Icon(Icons.cloud_upload_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BackupPage()),
+            ),
+          ),
           IconButton(
             tooltip: pitchBlack ? 'Pitch black: on' : 'Pitch black: off',
             icon: Icon(

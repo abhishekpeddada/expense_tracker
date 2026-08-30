@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and below: what Auto Backup sends to the user's Drive. -->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <!-- Transient SMS queue and dedup state are worthless in a restore. -->
+    <exclude domain="sharedpref" path="sms_queue.xml" />
+</full-backup-content>

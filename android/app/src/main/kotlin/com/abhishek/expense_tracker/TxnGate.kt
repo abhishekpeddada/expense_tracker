@@ -9,6 +9,13 @@ package com.abhishek.expense_tracker
 object TxnGate {
     private val amountRe =
         Regex("""(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE)
+
+    // Some banks state the amount with no currency symbol at all, e.g. SBI's
+    // "A/C X5942 debited by 1.00" — fall back to the number by the verb.
+    private val amountNearVerbRe = Regex(
+        """\b(?:debited|credited|spent|paid|sent|withdrawn|deducted|received|debit|credit)\s*(?:by|for|with|of|:)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\b""",
+        RegexOption.IGNORE_CASE
+    )
     private val debitRe =
         Regex("""\b(debited|spent|paid|withdrawn|purchase|sent|deducted)\b""", RegexOption.IGNORE_CASE)
     private val creditRe =
@@ -23,7 +30,8 @@ object TxnGate {
     fun check(body: String): Gate? {
         val text = body.replace('\n', ' ')
         if (rejectRe.containsMatchIn(text)) return null
-        val amount = amountRe.find(text)?.groupValues?.get(1) ?: return null
+        val amount = (amountRe.find(text) ?: amountNearVerbRe.find(text))
+            ?.groupValues?.get(1) ?: return null
         val d = debitRe.find(text)?.range?.first
         val c = creditRe.find(text)?.range?.first
         if (d == null && c == null) return null
