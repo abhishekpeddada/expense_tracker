@@ -116,10 +116,26 @@ Future<int?> ingestNotification(
 }) async {
   final parsed = SmsParser.parse(body, sender: source);
   if (parsed == null) return null;
-  if (await db.hasSimilarTransaction(at, parsed.amount, parsed.type,
-      MerchantName.display(parsed.merchant))) {
-    return null;
+
+  // The bank's SMS for this same payment may already be recorded. Enrich
+  // that record rather than adding a second one.
+  final existing = await db.findCrossSourceMatch(
+    amount: parsed.amount,
+    type: parsed.type,
+    at: at,
+    excludingSource: 'notification',
+  );
+  if (existing != null) {
+    await db.enrichTransaction(
+      existing,
+      merchant: MerchantName.display(parsed.merchant),
+      bank: parsed.bank,
+      accountTail: parsed.accountTail,
+      balance: parsed.balance,
+    );
+    return existing.id;
   }
+
   return db.insertTransaction(TransactionsCompanion.insert(
     amount: parsed.amount,
     type: parsed.type,
@@ -131,6 +147,7 @@ Future<int?> ingestNotification(
     smsEntryId: Value(smsEntryId),
     balance: Value(parsed.balance),
     category: Value(await Categorizer(db).learnedCategory(parsed.merchant)),
+    source: const Value('notification'),
     occurredAt: at,
   ));
 }
@@ -156,6 +173,31 @@ Future<IngestResult> ingestSms(
 
   int? txnId;
   if (parsed != null) {
+    // A payment app (CRED, GPay, PhonePe) may already have logged this same
+    // payment from its notification. Enrich that row with the richer SMS
+    // details instead of creating a duplicate.
+    final existing = await db.findCrossSourceMatch(
+      amount: parsed.amount,
+      type: parsed.type,
+      at: at,
+      excludingSource: 'sms',
+    );
+    if (existing != null) {
+      await db.enrichTransaction(
+        existing,
+        merchant: MerchantName.display(parsed.merchant),
+        bank: parsed.bank,
+        accountTail: parsed.accountTail,
+        balance: parsed.balance,
+        rawSms: body,
+        smsSender: sender,
+        smsEntryId: smsEntryId,
+        // The SMS is the authoritative record once it arrives.
+        source: 'sms',
+      );
+      return IngestResult(parsed, existing.id);
+    }
+
     txnId = await db.insertTransaction(TransactionsCompanion.insert(
       amount: parsed.amount,
       type: parsed.type,

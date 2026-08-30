@@ -30,6 +30,12 @@ class Transactions extends Table {
   /// transaction, when the SMS/statement stated one.
   RealColumn get balance => real().nullable()();
 
+  /// Where this record came from: sms, notification, manual or import.
+  /// Used to merge the two records a single payment can produce when both a
+  /// payment app notification and a bank SMS arrive.
+  TextColumn get source =>
+      text().withDefault(const Constant('sms'))();
+
   DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -80,7 +86,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -97,6 +103,9 @@ class AppDb extends _$AppDb {
           if (from < 5) {
             await m.createTable(categoryRules);
             await m.createTable(budgets);
+          }
+          if (from < 6) {
+            await m.addColumn(transactions, transactions.source);
           }
         },
       );
@@ -144,6 +153,79 @@ class AppDb extends _$AppDb {
       ..limit(1);
     return (await q.get()).isNotEmpty;
   }
+
+  /// Finds a transaction that looks like the same payment recorded from a
+  /// different source. A payment app notification and the bank's SMS carry
+  /// different wording, so the merchant cannot be compared — the amount,
+  /// direction and closeness in time are what identify it.
+  ///
+  /// [within] is generous because bank SMS can lag the app notification by
+  /// a long way; the amount having to match exactly is what keeps this from
+  /// merging genuinely separate payments.
+  Future<Transaction?> findCrossSourceMatch({
+    required double amount,
+    required TxnType type,
+    required DateTime at,
+    required String excludingSource,
+    Duration within = const Duration(hours: 6),
+  }) async {
+    final from = at.subtract(within);
+    final to = at.add(within);
+    final rows = await (select(transactions)
+          ..where((t) =>
+              t.amount.equals(amount) &
+              t.type.equalsValue(type) &
+              t.source.equals(excludingSource).not() &
+              t.occurredAt.isBiggerOrEqualValue(from) &
+              t.occurredAt.isSmallerOrEqualValue(to)))
+        .get();
+    if (rows.isEmpty) return null;
+    // If several match, take the one closest in time.
+    rows.sort((a, b) => (a.occurredAt.difference(at).abs())
+        .compareTo(b.occurredAt.difference(at).abs()));
+    return rows.first;
+  }
+
+  /// Fills in details a later, richer record carries without overwriting
+  /// anything already known — notably never the category, which the user
+  /// may already have set.
+  Future<void> enrichTransaction(
+    Transaction existing, {
+    String? merchant,
+    String? bank,
+    String? accountTail,
+    double? balance,
+    String? rawSms,
+    String? smsSender,
+    String? smsEntryId,
+    String? source,
+  }) =>
+      (update(transactions)..where((t) => t.id.equals(existing.id))).write(
+        TransactionsCompanion(
+          merchant: existing.merchant == null && merchant != null
+              ? Value(merchant)
+              : const Value.absent(),
+          bank: existing.bank == null && bank != null
+              ? Value(bank)
+              : const Value.absent(),
+          accountTail: existing.accountTail == null && accountTail != null
+              ? Value(accountTail)
+              : const Value.absent(),
+          balance: existing.balance == null && balance != null
+              ? Value(balance)
+              : const Value.absent(),
+          rawSms: existing.rawSms == null && rawSms != null
+              ? Value(rawSms)
+              : const Value.absent(),
+          smsSender: existing.smsSender == null && smsSender != null
+              ? Value(smsSender)
+              : const Value.absent(),
+          smsEntryId: existing.smsEntryId == null && smsEntryId != null
+              ? Value(smsEntryId)
+              : const Value.absent(),
+          source: source == null ? const Value.absent() : Value(source),
+        ),
+      );
 
   /// Applies a category picked on the notification to the transaction that
   /// came from that SMS entry. Only fills in uncategorized transactions —
