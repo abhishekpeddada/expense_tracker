@@ -52,7 +52,13 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --release --split-per-abi
+      # Without an incrementing version every APK looks like the same
+      # build to Android, so installs are offered as a fresh install rather
+      # than an update. Derive it from the run number.
+      - run: |
+          flutter build apk --release --split-per-abi \
+            --build-name=1.0.${{ github.run_number }} \
+            --build-number=${{ github.run_number }}
 
       - name: Rename APKs
         run: |

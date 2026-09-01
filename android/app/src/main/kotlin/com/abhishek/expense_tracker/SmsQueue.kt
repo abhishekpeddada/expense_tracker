@@ -75,29 +75,6 @@ object SmsQueue {
     }
 
     /**
-     * Queues a transaction seen in another app's notification rather than an
-     * SMS. Marked so the Dart side can label its origin.
-     */
-    @Synchronized
-    fun addNotification(
-        ctx: Context,
-        id: String,
-        source: String,
-        body: String,
-        ts: Long,
-    ) {
-        val arr = JSONArray(prefs(ctx).getString(KEY, "[]"))
-        arr.put(JSONObject().apply {
-            put("id", id)
-            put("sender", source)
-            put("body", body)
-            put("ts", ts)
-            put("fromNotification", true)
-        })
-        prefs(ctx).edit().putString(KEY, arr.toString()).apply()
-    }
-
-    /**
      * Records a message as handled, returning true only the first time.
      * SMS_DELIVER and SMS_RECEIVED both fire while we are the default app,
      * so whichever arrives first wins and the other is ignored.
@@ -165,7 +142,6 @@ object SmsQueue {
                     "body" to o.getString("body"),
                     "ts" to o.getLong("ts"),
                     "category" to if (o.has("category")) o.getString("category") else null,
-                    "fromNotification" to o.optBoolean("fromNotification", false),
                 )
             )
         }

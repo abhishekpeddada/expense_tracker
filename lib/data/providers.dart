@@ -105,53 +105,6 @@ class IngestResult {
   const IngestResult(this.parsed, this.txnId);
 }
 
-/// Records a transaction seen in another app's notification. No SMS row is
-/// created — there was no message, only a notification.
-Future<int?> ingestNotification(
-  AppDb db, {
-  required String source,
-  required String body,
-  required DateTime at,
-  String? smsEntryId,
-}) async {
-  final parsed = SmsParser.parse(body, sender: source);
-  if (parsed == null) return null;
-
-  // The bank's SMS for this same payment may already be recorded. Enrich
-  // that record rather than adding a second one.
-  final existing = await db.findCrossSourceMatch(
-    amount: parsed.amount,
-    type: parsed.type,
-    at: at,
-    excludingSource: 'notification',
-  );
-  if (existing != null) {
-    await db.enrichTransaction(
-      existing,
-      merchant: MerchantName.display(parsed.merchant),
-      bank: parsed.bank,
-      accountTail: parsed.accountTail,
-      balance: parsed.balance,
-    );
-    return existing.id;
-  }
-
-  return db.insertTransaction(TransactionsCompanion.insert(
-    amount: parsed.amount,
-    type: parsed.type,
-    accountKind: parsed.accountKind,
-    accountTail: Value(parsed.accountTail),
-    merchant: Value(MerchantName.display(parsed.merchant)),
-    bank: Value(parsed.bank ?? source),
-    smsSender: Value(source),
-    smsEntryId: Value(smsEntryId),
-    balance: Value(parsed.balance),
-    category: Value(await Categorizer(db).learnedCategory(parsed.merchant)),
-    source: const Value('notification'),
-    occurredAt: at,
-  ));
-}
-
 /// Ingests an incoming SMS: stores it for the Messages tab and, when it
 /// parses as a transaction, records the transaction as uncategorized.
 Future<IngestResult> ingestSms(
@@ -173,31 +126,6 @@ Future<IngestResult> ingestSms(
 
   int? txnId;
   if (parsed != null) {
-    // A payment app (CRED, GPay, PhonePe) may already have logged this same
-    // payment from its notification. Enrich that row with the richer SMS
-    // details instead of creating a duplicate.
-    final existing = await db.findCrossSourceMatch(
-      amount: parsed.amount,
-      type: parsed.type,
-      at: at,
-      excludingSource: 'sms',
-    );
-    if (existing != null) {
-      await db.enrichTransaction(
-        existing,
-        merchant: MerchantName.display(parsed.merchant),
-        bank: parsed.bank,
-        accountTail: parsed.accountTail,
-        balance: parsed.balance,
-        rawSms: body,
-        smsSender: sender,
-        smsEntryId: smsEntryId,
-        // The SMS is the authoritative record once it arrives.
-        source: 'sms',
-      );
-      return IngestResult(parsed, existing.id);
-    }
-
     txnId = await db.insertTransaction(TransactionsCompanion.insert(
       amount: parsed.amount,
       type: parsed.type,

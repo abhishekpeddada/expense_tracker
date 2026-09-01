@@ -12,7 +12,6 @@ import android.provider.Settings
 import android.provider.Telephony
 import android.telephony.SmsManager
 import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -96,22 +95,22 @@ class MainActivity : FlutterActivity() {
                 }
                 "drainSmsQueue" -> result.success(SmsQueue.drain(this))
                 "getReceiveLog" -> result.success(SmsQueue.readLog(this))
+                "getAppVersion" -> {
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    result.success(
+                        mapOf(
+                            "versionName" to info.versionName,
+                            "versionCode" to
+                                if (Build.VERSION.SDK_INT >= 28)
+                                    info.longVersionCode
+                                else @Suppress("DEPRECATION") info.versionCode.toLong(),
+                        )
+                    )
+                }
                 "postBudgetAlert" -> {
                     val title = call.argument<String>("title") ?: ""
                     val body = call.argument<String>("body") ?: ""
                     Notifier.postBudgetAlert(this, title, body)
-                    result.success(null)
-                }
-                "isNotificationAccessGranted" -> result.success(
-                    NotificationManagerCompat.getEnabledListenerPackages(this)
-                        .contains(packageName)
-                )
-                "openNotificationAccessSettings" -> {
-                    runCatching {
-                        startActivity(
-                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                        )
-                    }
                     result.success(null)
                 }
                 "clearReceiveLog" -> {

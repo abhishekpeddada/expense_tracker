@@ -98,19 +98,6 @@
             </intent-filter>
         </service>
 
-        <!-- Reads payment-app notifications so transactions are captured
-             even when the bank sends no SMS. Requires the user to grant
-             notification access in system settings. -->
-        <service
-            android:name=".TxnNotificationListener"
-            android:exported="false"
-            android:label="Expense Tracker"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService"/>
-            </intent-filter>
-        </service>
-
         <!-- Handles category quick-actions on the transaction notification. -->
         <receiver
             android:name=".CategoryActionReceiver"

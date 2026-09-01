@@ -437,9 +437,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// transaction, when the SMS/statement stated one.
   final double? balance;
 
-  /// Where this record came from: sms, notification, manual or import.
-  /// Used to merge the two records a single payment can produce when both a
-  /// payment app notification and a bank SMS arrive.
+  /// Where this record came from: sms, manual or import. Kept for
+  /// provenance when a transaction is inspected or exported.
   final String source;
   final DateTime occurredAt;
   final DateTime createdAt;

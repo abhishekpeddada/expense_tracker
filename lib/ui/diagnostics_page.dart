@@ -19,6 +19,7 @@ class DiagnosticsPage extends ConsumerStatefulWidget {
 
 class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
   Map<String, bool> _checks = {};
+  String? _version;
   List<Map<String, Object?>> _log = [];
   bool _loading = true;
 
@@ -32,18 +33,18 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
     setState(() => _loading = true);
     final sms = ref.read(smsServiceProvider);
     final checks = await sms.diagnostics();
-    checks['notificationAccess'] = await sms.isNotificationAccessGranted;
     final log = await sms.receiveLog();
+    final version = await sms.appVersion();
     if (!mounted) return;
     setState(() {
       _checks = checks;
+      _version = version;
       _log = log;
       _loading = false;
     });
   }
 
   static const _labels = {
-    'notificationAccess': 'Payment app notifications',
     'isDefaultSmsApp': 'Default SMS app',
     'batteryUnrestricted': 'Battery unrestricted',
     'receiveSms': 'Receive SMS permission',
@@ -85,6 +86,12 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                if (_version != null)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.info_outline),
+                    title: Text('Version $_version'),
+                  ),
                 for (final entry in _labels.entries)
                   ListTile(
                     dense: true,
@@ -99,17 +106,7 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                     title: Text(entry.value),
                     subtitle: (_checks[entry.key] ?? false)
                         ? null
-                        : Text(entry.key == 'notificationAccess'
-                            ? 'Off — transactions with no SMS will be missed. '
-                                'Tap to grant.'
-                            : 'Not granted — messages may be missed'),
-                    onTap: entry.key == 'notificationAccess'
-                        ? () async {
-                            await ref
-                                .read(smsServiceProvider)
-                                .openNotificationAccessSettings();
-                          }
-                        : null,
+                        : const Text('Not granted — messages may be missed'),
                   ),
                 const Divider(),
                 Padding(

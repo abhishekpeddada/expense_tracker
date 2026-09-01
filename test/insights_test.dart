@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:expense_tracker/data/db.dart';
-import 'package:expense_tracker/data/providers.dart';
 import 'package:expense_tracker/models/models.dart';
 import 'package:expense_tracker/services/insights.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -157,68 +156,6 @@ void main() {
       final left = await db.watchMessages().first;
       expect(left, hasLength(1));
       expect(left.single.sender, 'B');
-    });
-
-    test('a notification and its bank SMS make one transaction, not two',
-        () async {
-      final at = DateTime(2026, 8, 25, 22, 0);
-      // CRED notices the payment first, with no merchant detail.
-      await ingestNotification(
-        db,
-        source: 'CRED',
-        body: 'Acct XX039 debited for Rs 1.00',
-        at: at,
-      );
-      // The bank SMS follows 20 minutes later with the full detail.
-      await ingestSms(
-        db,
-        sender: 'AD-ICICIT-S',
-        body: 'ICICI Bank Acct XX039 debited for Rs 1.00 on 25-Aug-26 at '
-            'SWIGGY. Avl bal Rs 500.00',
-        receivedAt: at.add(const Duration(minutes: 20)),
-      );
-
-      final txns = await db.watchTransactions().first;
-      expect(txns, hasLength(1));
-      // The SMS detail is merged into the record the notification created.
-      expect(txns.single.merchant, 'Swiggy');
-      expect(txns.single.balance, 500.00);
-      expect(txns.single.source, 'sms');
-    });
-
-    test('the SMS arriving first also yields one transaction', () async {
-      final at = DateTime(2026, 8, 25, 22, 0);
-      await ingestSms(
-        db,
-        sender: 'AD-ICICIT-S',
-        body: 'ICICI Bank Acct XX039 debited for Rs 250.00 at STORE',
-        receivedAt: at,
-      );
-      await ingestNotification(
-        db,
-        source: 'CRED',
-        body: 'Acct XX039 debited for Rs 250.00',
-        at: at.add(const Duration(minutes: 5)),
-      );
-      expect(await db.watchTransactions().first, hasLength(1));
-    });
-
-    test('two separate payments of the same amount are kept apart', () async {
-      final at = DateTime(2026, 8, 25, 9, 0);
-      await ingestNotification(
-        db,
-        source: 'CRED',
-        body: 'Acct XX039 debited for Rs 50.00',
-        at: at,
-      );
-      // Far outside the merge window, so this is a different coffee.
-      await ingestNotification(
-        db,
-        source: 'CRED',
-        body: 'Acct XX039 debited for Rs 50.00',
-        at: at.add(const Duration(hours: 9)),
-      );
-      expect(await db.watchTransactions().first, hasLength(2));
     });
 
     test('marking a thread unread flips the newest incoming message',

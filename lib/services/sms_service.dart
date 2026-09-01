@@ -78,23 +78,15 @@ class SmsService {
     }
   }
 
-  /// Whether the user has granted notification access, which the listener
-  /// needs in order to see payment-app notifications.
-  Future<bool> get isNotificationAccessGranted async {
+  /// Version of the installed build, for identifying what is running.
+  Future<String?> appVersion() async {
     try {
-      return await _channel
-              .invokeMethod<bool>('isNotificationAccessGranted') ??
-          false;
+      final m =
+          await _channel.invokeMethod<Map<Object?, Object?>>('getAppVersion');
+      if (m == null) return null;
+      return '${m['versionName']} (${m['versionCode']})';
     } on MissingPluginException {
-      return false;
-    }
-  }
-
-  Future<void> openNotificationAccessSettings() async {
-    try {
-      await _channel.invokeMethod('openNotificationAccessSettings');
-    } on MissingPluginException {
-      // ignore off-Android
+      return null;
     }
   }
 
@@ -146,18 +138,6 @@ class SmsService {
     for (final e in entries) {
       final m = (e as Map).cast<String, Object?>();
       try {
-        if (m['fromNotification'] == true) {
-          await ingestNotification(
-            _db,
-            source: m['sender'] as String? ?? 'Payment app',
-            body: m['body'] as String? ?? '',
-            at: DateTime.fromMillisecondsSinceEpoch(
-                (m['ts'] as num?)?.toInt() ??
-                    DateTime.now().millisecondsSinceEpoch),
-            smsEntryId: m['id'] as String?,
-          );
-          continue;
-        }
         final result = await ingestSms(
           _db,
           sender: m['sender'] as String? ?? 'Unknown',
