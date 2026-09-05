@@ -92,6 +92,64 @@ void main() {
       expect(() => OpenRouterClient.parseCompletion(200, completion('   ')),
           throwsA(isA<OpenRouterException>()));
     });
+
+    test('a reasoning model that thought past its budget is truncated', () {
+      // What minimax-m2.7 actually returns: all the tokens went to
+      // reasoning, the content is empty, finish_reason is length.
+      final body = jsonEncode({
+        'choices': [
+          {
+            'finish_reason': 'length',
+            'native_finish_reason': 'length',
+            'message': {'role': 'assistant', 'content': ''},
+          }
+        ]
+      });
+      expect(
+        () => OpenRouterClient.parseCompletion(200, body),
+        throwsA(isA<OpenRouterException>()
+            .having((e) => e.truncated, 'truncated', isTrue)
+            .having((e) => e.message, 'message', contains('thinking'))),
+      );
+    });
+
+    test('falls back to the reasoning field when content is empty', () {
+      final body = jsonEncode({
+        'choices': [
+          {
+            'finish_reason': 'stop',
+            'message': {
+              'role': 'assistant',
+              'content': '',
+              'reasoning': 'The answer is {"calories": 58}',
+            },
+          }
+        ]
+      });
+      expect(OpenRouterClient.parseCompletion(200, body),
+          contains('"calories": 58'));
+    });
+
+    test('an ordinary empty answer is not marked truncated', () {
+      expect(
+        () => OpenRouterClient.parseCompletion(200, completion('')),
+        throwsA(isA<OpenRouterException>()
+            .having((e) => e.truncated, 'truncated', isFalse)),
+      );
+    });
+
+    test('content that arrived before truncation is still used', () {
+      final body = jsonEncode({
+        'choices': [
+          {
+            'finish_reason': 'length',
+            'message': {'role': 'assistant', 'content': '{"calories": 58}'},
+          }
+        ]
+      });
+      expect(OpenRouterClient.parseCompletion(200, body),
+          '{"calories": 58}');
+    });
   });
 
   group('nutrition answer', () {

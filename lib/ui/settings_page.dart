@@ -55,6 +55,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _testing = true;
       _testResult = null;
     });
+
+    // Two separate things can be wrong: the key, or the chosen model. The
+    // key check alone would pass while every lookup still failed, so this
+    // runs a real estimate through the selected model as well.
     String message;
     var failed = false;
     try {
@@ -66,6 +70,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       message = 'Could not reach OpenRouter: $e';
       failed = true;
     }
+
+    if (!failed) {
+      try {
+        final e = await client.estimate(_testFood);
+        final kcal = e.calories;
+        message = '$message\n\n${client.model} answered for $_testFood: '
+            '${kcal == null ? 'no calorie figure' : '${kcal.round()} kcal'}'
+            '${e.hasMacros ? ', with macros' : ', no macros'}.';
+      } on OpenRouterException catch (e) {
+        failed = true;
+        message = 'The key works, but ${client.model} could not answer: '
+            '${e.message}';
+      } catch (e) {
+        failed = true;
+        message = 'The key works, but the lookup failed: $e';
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _testing = false;
@@ -73,6 +95,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _testFailed = failed;
     });
   }
+
+  /// A food deliberately not in the built-in list, so the test cannot pass
+  /// on a local answer while the model is actually broken.
+  static const _testFood = 'Ragi mudde with bassaru';
 
   Future<void> _pickModel() async {
     final settings = ref.read(settingsProvider);
@@ -146,7 +172,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           width: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Save & test'),
+                      : const Text('Save & test lookup'),
                 ),
                 const SizedBox(width: 12),
                 if (settings.hasKey)

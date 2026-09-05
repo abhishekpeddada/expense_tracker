@@ -80,7 +80,13 @@ class ChatTurn {
 
 class OpenRouterException implements Exception {
   final String message;
-  const OpenRouterException(this.message);
+
+  /// True when the model hit its token budget before finishing. Reasoning
+  /// models can burn the whole budget thinking and return nothing at all,
+  /// so this is worth retrying with more room rather than reporting.
+  final bool truncated;
+
+  const OpenRouterException(this.message, {this.truncated = false});
   @override
   String toString() => message;
 }
@@ -146,7 +152,7 @@ class OpenRouterClient {
   Future<String> chat({
     required String system,
     required List<ChatTurn> history,
-    int maxTokens = 1200,
+    int maxTokens = 2500,
   }) async {
     late final http.Response res;
     try {
@@ -170,26 +176,55 @@ class OpenRouterClient {
   }
 
   /// Asks the chosen model for the nutrition of one serving of [food].
+  /// The answer itself is a handful of numbers, but a reasoning model can
+  /// spend thousands of tokens thinking before writing any of them, and a
+  /// budget that runs out first returns nothing at all. This is sized for
+  /// that, and [_estimateOnce] retries with more room if it still happens.
+  static const _estimateTokens = 1500;
+
   Future<NutritionEstimate> estimate(String food, {String? note}) async {
-    final res = await _http.post(
-      Uri.parse('$_base/chat/completions'),
-      headers: _headers,
-      body: jsonEncode({
-        'model': model,
-        'temperature': 0.1,
-        'max_tokens': 300,
-        'response_format': {'type': 'json_object'},
-        'messages': [
-          {'role': 'system', 'content': systemPrompt},
-          {
-            'role': 'user',
-            'content': note == null || note.isEmpty
-                ? 'Food: $food'
-                : 'Food: $food\nExtra detail: $note',
-          },
-        ],
-      }),
-    );
+    try {
+      return await _estimateOnce(food, note: note, maxTokens: _estimateTokens);
+    } on OpenRouterException catch (e) {
+      if (!e.truncated) rethrow;
+      // Thought its way through the whole budget. Give it a much larger one
+      // before giving up, since a second failure is worth reporting.
+      return _estimateOnce(food, note: note, maxTokens: _estimateTokens * 4);
+    }
+  }
+
+  Future<NutritionEstimate> _estimateOnce(
+    String food, {
+    String? note,
+    required int maxTokens,
+  }) async {
+    late final http.Response res;
+    try {
+      res = await _http.post(
+        Uri.parse('$_base/chat/completions'),
+        headers: _headers,
+        body: jsonEncode({
+          'model': model,
+          'temperature': 0.1,
+          'max_tokens': maxTokens,
+          // Nothing here needs deliberation, and reasoning tokens are what
+          // starve the answer. Models that cannot turn it off ignore this.
+          'reasoning': {'enabled': false},
+          'response_format': {'type': 'json_object'},
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {
+              'role': 'user',
+              'content': note == null || note.isEmpty
+                  ? 'Food: $food'
+                  : 'Food: $food\nExtra detail: $note',
+            },
+          ],
+        }),
+      );
+    } catch (e) {
+      throw OpenRouterException('Could not reach OpenRouter: $e');
+    }
     final content = parseCompletion(res.statusCode, res.body);
     return parseEstimate(content, model: model);
   }
@@ -217,7 +252,9 @@ class OpenRouterClient {
       'serving the numbers are for, e.g. "1 cup (150 g)"), note (string, '
       'optional, at most 12 words). All figures are for ONE typical serving '
       'as commonly eaten, not per 100 g, unless the food name itself states '
-      'a quantity. If the input is not a food, reply {"unknown": true}.';
+      'a quantity. If the input is not a food, reply {"unknown": true}. '
+      'Answer immediately with the JSON object; do not think it through '
+      'first and do not write anything before or after it.';
 
   static List<OpenRouterModel> parseModels(String body) {
     final decoded = jsonDecode(body);
@@ -258,9 +295,25 @@ class OpenRouterClient {
     if (choices is! List || choices.isEmpty) {
       throw const OpenRouterException('The model returned no answer.');
     }
-    final message = (choices.first as Map)['message'];
+    final choice = (choices.first as Map).cast<String, Object?>();
+    final message = choice['message'];
     final content = message is Map ? message['content'] : null;
     if (content is String && content.trim().isNotEmpty) return content;
+
+    // No content. A reasoning model that used its whole budget thinking
+    // lands here with finish_reason 'length' and, on some providers, the
+    // half-finished thoughts in a separate field.
+    final truncated = choice['finish_reason'] == 'length' ||
+        choice['native_finish_reason'] == 'length';
+    if (truncated) {
+      throw const OpenRouterException(
+        'The model used its whole token budget thinking and never got to '
+        'the answer. Reasoning models often do this - try a different one.',
+        truncated: true,
+      );
+    }
+    final reasoning = message is Map ? message['reasoning'] : null;
+    if (reasoning is String && reasoning.trim().isNotEmpty) return reasoning;
     throw const OpenRouterException('The model returned an empty answer.');
   }
 
