@@ -37,6 +37,17 @@ final budgetsProvider = StreamProvider<List<Budget>>(
   (ref) => ref.watch(dbProvider).watchBudgets(),
 );
 
+/// Everything ever logged on the Food tab, newest first.
+final foodEntriesProvider = StreamProvider<List<FoodEntry>>(
+  (ref) => ref.watch(dbProvider).watchFoodEntries(),
+);
+
+/// Food logged on one particular day.
+final foodForDayProvider =
+    StreamProvider.family<List<FoodEntry>, DateTime>((ref, day) {
+  return ref.watch(dbProvider).watchFoodForDay(day);
+});
+
 /// A bank account / credit card derived from transaction data. There is no
 /// live bank link — accounts appear automatically from parsed SMS and
 /// imported statements (grouped by bank + last-4 + kind).

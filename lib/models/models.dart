@@ -3,6 +3,26 @@ library;
 
 enum TxnType { debit, credit }
 
+/// Which meal a food entry belongs to.
+enum Meal { breakfast, lunch, dinner, snack }
+
+extension MealLabel on Meal {
+  String get label => switch (this) {
+        Meal.breakfast => 'Breakfast',
+        Meal.lunch => 'Lunch',
+        Meal.dinner => 'Dinner',
+        Meal.snack => 'Snack',
+      };
+
+  /// The meal most likely being eaten at this hour, used to preselect one.
+  static Meal forHour(int hour) {
+    if (hour < 11) return Meal.breakfast;
+    if (hour < 16) return Meal.lunch;
+    if (hour < 21) return Meal.dinner;
+    return Meal.snack;
+  }
+}
+
 /// Where the money moved from/to.
 enum AccountKind { bank, creditCard, wallet, unknown }
 

@@ -70,6 +70,21 @@ class CategoryRules extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// One thing eaten, logged by hand on the Food tab.
+class FoodEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  IntColumn get meal => intEnum<Meal>()();
+
+  /// Calories for a single serving; null when unknown, since a log entry is
+  /// still useful without one.
+  RealColumn get calories => real().nullable()();
+  RealColumn get servings => real().withDefault(const Constant(1))();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get eatenAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// Monthly spending cap for a category.
 class Budgets extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -77,7 +92,8 @@ class Budgets extends Table {
   RealColumn get monthlyLimit => real()();
 }
 
-@DriftDatabase(tables: [Transactions, SmsMessages, CategoryRules, Budgets])
+@DriftDatabase(
+    tables: [Transactions, SmsMessages, CategoryRules, Budgets, FoodEntries])
 class AppDb extends _$AppDb {
   AppDb() : super(driftDatabase(name: 'expense_tracker'));
 
@@ -85,7 +101,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -105,6 +121,9 @@ class AppDb extends _$AppDb {
           }
           if (from < 6) {
             await m.addColumn(transactions, transactions.source);
+          }
+          if (from < 7) {
+            await m.createTable(foodEntries);
           }
         },
       );
@@ -295,6 +314,50 @@ class AppDb extends _$AppDb {
           occurredAt: Value(occurredAt),
         ),
       );
+
+  // ---- Food log ----
+
+  Stream<List<FoodEntry>> watchFoodEntries() => (select(foodEntries)
+        ..orderBy([(f) => OrderingTerm.desc(f.eatenAt)]))
+      .watch();
+
+  /// Everything eaten on one calendar day, earliest first.
+  Stream<List<FoodEntry>> watchFoodForDay(DateTime day) {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
+    return (select(foodEntries)
+          ..where((f) =>
+              f.eatenAt.isBiggerOrEqualValue(start) &
+              f.eatenAt.isSmallerThanValue(end))
+          ..orderBy([(f) => OrderingTerm.asc(f.eatenAt)]))
+        .watch();
+  }
+
+  Future<int> insertFoodEntry(FoodEntriesCompanion entry) =>
+      into(foodEntries).insert(entry);
+
+  Future<void> updateFoodEntry(
+    int id, {
+    required String name,
+    required Meal meal,
+    double? calories,
+    required double servings,
+    String? note,
+    required DateTime eatenAt,
+  }) =>
+      (update(foodEntries)..where((f) => f.id.equals(id))).write(
+        FoodEntriesCompanion(
+          name: Value(name),
+          meal: Value(meal),
+          calories: Value(calories),
+          servings: Value(servings),
+          note: Value(note),
+          eatenAt: Value(eatenAt),
+        ),
+      );
+
+  Future<void> deleteFoodEntry(int id) =>
+      (delete(foodEntries)..where((f) => f.id.equals(id))).go();
 
   /// Marks all incoming messages from a sender as read.
   Future<void> markThreadRead(String sender) => (update(smsMessages)
