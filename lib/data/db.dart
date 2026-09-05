@@ -101,6 +101,25 @@ class FoodEntries extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// One turn of the assistant conversation on the Chat tab. Kept so the
+/// thread and its follow-ups survive the app being closed.
+class ChatMessages extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// 'user' or 'assistant'.
+  TextColumn get role => text()();
+  TextColumn get content => text()();
+
+  /// Model that produced an assistant turn, for provenance.
+  TextColumn get model => text().nullable()();
+
+  /// True when the turn is an error notice rather than a real answer, so it
+  /// is shown differently and never sent back as conversation history.
+  BoolColumn get isError => boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// Monthly spending cap for a category.
 class Budgets extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -108,8 +127,14 @@ class Budgets extends Table {
   RealColumn get monthlyLimit => real()();
 }
 
-@DriftDatabase(
-    tables: [Transactions, SmsMessages, CategoryRules, Budgets, FoodEntries])
+@DriftDatabase(tables: [
+  Transactions,
+  SmsMessages,
+  CategoryRules,
+  Budgets,
+  FoodEntries,
+  ChatMessages,
+])
 class AppDb extends _$AppDb {
   AppDb() : super(driftDatabase(name: 'expense_tracker'));
 
@@ -117,7 +142,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -148,6 +173,9 @@ class AppDb extends _$AppDb {
             await m.addColumn(foodEntries, foodEntries.servingSize);
             await m.addColumn(foodEntries, foodEntries.nutritionSource);
             await m.addColumn(foodEntries, foodEntries.nutritionModel);
+          }
+          if (from < 9) {
+            await m.createTable(chatMessages);
           }
         },
       );
@@ -394,6 +422,25 @@ class AppDb extends _$AppDb {
 
   Future<void> deleteFoodEntry(int id) =>
       (delete(foodEntries)..where((f) => f.id.equals(id))).go();
+
+  // ---- Chat ----
+
+  /// The whole conversation, oldest first.
+  Stream<List<ChatMessage>> watchChat() => (select(chatMessages)
+        ..orderBy([(c) => OrderingTerm.asc(c.createdAt), (c) => OrderingTerm.asc(c.id)]))
+      .watch();
+
+  Future<List<ChatMessage>> chatHistory() => (select(chatMessages)
+        ..orderBy([(c) => OrderingTerm.asc(c.createdAt), (c) => OrderingTerm.asc(c.id)]))
+      .get();
+
+  Future<int> insertChatMessage(ChatMessagesCompanion message) =>
+      into(chatMessages).insert(message);
+
+  Future<void> deleteChatMessage(int id) =>
+      (delete(chatMessages)..where((c) => c.id.equals(id))).go();
+
+  Future<void> clearChat() => delete(chatMessages).go();
 
   /// True when the same food is already logged at the same moment, so a
   /// backup restored twice does not duplicate the log.

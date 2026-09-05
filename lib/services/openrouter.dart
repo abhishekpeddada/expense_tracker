@@ -67,6 +67,17 @@ class OpenRouterModel {
   }
 }
 
+/// One message in a conversation sent to a model.
+class ChatTurn {
+  /// 'user' or 'assistant'.
+  final String role;
+  final String content;
+  const ChatTurn(this.role, this.content);
+
+  const ChatTurn.user(this.content) : role = 'user';
+  const ChatTurn.assistant(this.content) : role = 'assistant';
+}
+
 class OpenRouterException implements Exception {
   final String message;
   const OpenRouterException(this.message);
@@ -128,6 +139,34 @@ class OpenRouterClient {
             : 'used \$${usage.toStringAsFixed(2)}',
     ];
     return parts.isEmpty ? 'Key accepted.' : 'Key accepted — ${parts.join(', ')}.';
+  }
+
+  /// Runs a chat turn: [system] is the briefing, [history] the conversation
+  /// so far (oldest first). Returns the assistant's reply.
+  Future<String> chat({
+    required String system,
+    required List<ChatTurn> history,
+    int maxTokens = 1200,
+  }) async {
+    late final http.Response res;
+    try {
+      res = await _http.post(
+        Uri.parse('$_base/chat/completions'),
+        headers: _headers,
+        body: jsonEncode({
+          'model': model,
+          'temperature': 0.3,
+          'max_tokens': maxTokens,
+          'messages': [
+            {'role': 'system', 'content': system},
+            for (final t in history) {'role': t.role, 'content': t.content},
+          ],
+        }),
+      );
+    } catch (e) {
+      throw OpenRouterException('Could not reach OpenRouter: $e');
+    }
+    return parseCompletion(res.statusCode, res.body).trim();
   }
 
   /// Asks the chosen model for the nutrition of one serving of [food].

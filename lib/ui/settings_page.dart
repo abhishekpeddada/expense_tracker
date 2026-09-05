@@ -98,14 +98,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          const _SectionHeader('Nutrition lookup'),
+          const _SectionHeader('OpenRouter'),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'With an OpenRouter key, calories and macros are worked out '
-              'automatically for whatever you log on the Food tab. Without '
-              'one, the app falls back to its small built-in list of common '
-              'foods.',
+              'One key powers two things: calories and macros worked out '
+              'automatically for whatever you log on the Food tab, and the '
+              'Assistant tab, where you can ask questions about your own '
+              'spending and eating. Without a key, food logging falls back '
+              'to a small built-in list and the Assistant is unavailable.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -176,15 +177,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: Text(
               'The key is stored on this device only. It is sent to '
               'openrouter.ai and nowhere else, and is left out of backup '
-              'files. Only the food name and serving you type are sent for '
-              'a lookup.',
+              'files. A food lookup sends just the name and serving you '
+              'typed. The Assistant sends a summary of your transactions, '
+              'accounts, budgets and food log — never raw SMS text — and '
+              '"What gets sent" on that tab shows it in full.',
               style: theme.textTheme.bodySmall,
             ),
           ),
           ListTile(
             leading: const Icon(Icons.memory_outlined),
             title: const Text('Model'),
-            subtitle: Text(settings.openRouterModel),
+            subtitle: Text('${settings.openRouterModel}\n'
+                'Used for both food lookups and the Assistant'),
+            isThreeLine: true,
             trailing: const Icon(Icons.chevron_right),
             onTap: _pickModel,
           ),

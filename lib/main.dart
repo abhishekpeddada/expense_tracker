@@ -5,7 +5,9 @@ import 'data/providers.dart';
 import 'services/budget_alerts.dart';
 import 'services/settings_service.dart';
 import 'services/sms_service.dart';
+import 'services/chat_service.dart';
 import 'ui/accounts_page.dart';
+import 'ui/chat_page.dart';
 import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/food_page.dart';
@@ -76,9 +78,13 @@ class _HomeShellState extends ConsumerState<HomeShell>
     'Messages',
     'Transactions',
     'Food',
+    'Assistant',
     'Accounts',
     'Dashboard',
   ];
+
+  /// Index of the Chat tab, which brings its own app-bar actions.
+  static const _chatIndex = 3;
 
   @override
   void initState() {
@@ -105,6 +111,29 @@ class _HomeShellState extends ConsumerState<HomeShell>
     }
   }
 
+  Future<void> _confirmClearChat() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear conversation?'),
+        content: const Text(
+            'The whole thread is deleted. Your transactions and food log '
+            'are not affected.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('CLEAR'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await ref.read(chatServiceProvider).clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     final uncategorized = ref.watch(uncategorizedProvider).valueOrNull ?? [];
@@ -122,6 +151,32 @@ class _HomeShellState extends ConsumerState<HomeShell>
                 MaterialPageRoute(builder: (_) => const DiagnosticsPage()),
               ),
             ),
+          if (_index == _chatIndex)
+            PopupMenuButton<String>(
+              tooltip: 'Chat options',
+              onSelected: (value) {
+                switch (value) {
+                  case 'context':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ChatContextPage()),
+                    );
+                  case 'clear':
+                    _confirmClearChat();
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'context',
+                  child: Text('What gets sent'),
+                ),
+                PopupMenuItem(
+                  value: 'clear',
+                  child: Text('Clear conversation'),
+                ),
+              ],
+            ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
@@ -138,11 +193,15 @@ class _HomeShellState extends ConsumerState<HomeShell>
           MessagesPage(),
           TransactionsPage(),
           FoodPage(),
+          ChatPage(),
           AccountsPage(),
           DashboardPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
+        // Six destinations is more than the labels fit side by side, so
+        // only the selected one is named.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: [
@@ -164,6 +223,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
             icon: Icon(Icons.restaurant_outlined),
             selectedIcon: Icon(Icons.restaurant),
             label: 'Food',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome),
+            label: 'Assistant',
           ),
           const NavigationDestination(
             icon: Icon(Icons.account_balance_outlined),
