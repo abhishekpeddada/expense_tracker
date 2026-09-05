@@ -11,17 +11,22 @@ import '../models/models.dart';
 
 /// Backup format version. Bumped only if the shape below changes in a way
 /// older builds could not read.
-const _formatVersion = 1;
+const _formatVersion = 2;
 
 class RestoreResult {
   final int transactions;
   final int messages;
+  final int food;
   final int skipped;
-  const RestoreResult(this.transactions, this.messages, this.skipped);
+  const RestoreResult(
+      this.transactions, this.messages, this.food, this.skipped);
 }
 
 /// Exports and restores everything the app stores, as a plain JSON file the
 /// user can keep anywhere (Google Drive, email, another phone).
+///
+/// Settings are deliberately not included: the OpenRouter API key is a
+/// credential and must not travel in a file that gets shared around.
 ///
 /// This is deliberately independent of the SQLite file: a JSON snapshot
 /// survives schema changes, a raw database copy does not.
@@ -33,6 +38,7 @@ class BackupService {
   Future<Map<String, Object?>> _snapshot() async {
     final txns = await _db.select(_db.transactions).get();
     final msgs = await _db.select(_db.smsMessages).get();
+    final food = await _db.select(_db.foodEntries).get();
     return {
       'formatVersion': _formatVersion,
       'exportedAt': DateTime.now().toIso8601String(),
@@ -62,6 +68,23 @@ class BackupService {
             'isTransaction': m.isTransaction,
             'read': m.read,
             'outgoing': m.outgoing,
+          },
+      ],
+      'food': [
+        for (final f in food)
+          {
+            'name': f.name,
+            'meal': f.meal.name,
+            'calories': f.calories,
+            'servings': f.servings,
+            'protein': f.protein,
+            'carbs': f.carbs,
+            'fat': f.fat,
+            'servingSize': f.servingSize,
+            'nutritionSource': f.nutritionSource,
+            'nutritionModel': f.nutritionModel,
+            'note': f.note,
+            'eatenAt': f.eatenAt.toIso8601String(),
           },
       ],
     };
@@ -141,7 +164,7 @@ class BackupService {
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
-    if (picked == null) return const RestoreResult(0, 0, 0);
+    if (picked == null) return const RestoreResult(0, 0, 0, 0);
 
     final raw = utf8.decode(await picked.readAsBytes(), allowMalformed: true);
     final data = jsonDecode(raw);
@@ -149,7 +172,7 @@ class BackupService {
       throw const FormatException('Not an Expense Tracker backup file.');
     }
 
-    var txnCount = 0, msgCount = 0, skipped = 0;
+    var txnCount = 0, msgCount = 0, foodCount = 0, skipped = 0;
 
     for (final e in (data['transactions'] as List? ?? [])) {
       final m = (e as Map).cast<String, Object?>();
@@ -198,6 +221,33 @@ class BackupService {
       msgCount++;
     }
 
-    return RestoreResult(txnCount, msgCount, skipped);
+    // Older backups (format 1) have no food section; the loop just no-ops.
+    for (final e in (data['food'] as List? ?? [])) {
+      final m = (e as Map).cast<String, Object?>();
+      final eatenAt = DateTime.parse(m['eatenAt'] as String);
+      final name = m['name'] as String;
+      if (await _db.hasFoodEntry(name, eatenAt)) {
+        skipped++;
+        continue;
+      }
+      double? real(Object? v) => (v as num?)?.toDouble();
+      await _db.insertFoodEntry(FoodEntriesCompanion.insert(
+        name: name,
+        meal: Meal.values.byName(m['meal'] as String),
+        calories: Value(real(m['calories'])),
+        servings: Value(real(m['servings']) ?? 1),
+        protein: Value(real(m['protein'])),
+        carbs: Value(real(m['carbs'])),
+        fat: Value(real(m['fat'])),
+        servingSize: Value(m['servingSize'] as String?),
+        nutritionSource: Value(m['nutritionSource'] as String?),
+        nutritionModel: Value(m['nutritionModel'] as String?),
+        note: Value(m['note'] as String?),
+        eatenAt: eatenAt,
+      ));
+      foodCount++;
+    }
+
+    return RestoreResult(txnCount, msgCount, foodCount, skipped);
   }
 }

@@ -79,8 +79,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
               final r = await backup.importFromFile();
               messenger.showSnackBar(SnackBar(
                 content: Text(
-                  'Restored ${r.transactions} transactions and '
-                  '${r.messages} messages'
+                  'Restored ${r.transactions} transactions, '
+                  '${r.messages} messages and ${r.food} food entries'
                   '${r.skipped > 0 ? ' (${r.skipped} already present)' : ''}',
                 ),
               ));

@@ -5,4 +5,7 @@
     <include domain="sharedpref" path="." />
     <!-- Transient SMS queue and dedup state are worthless in a restore. -->
     <exclude domain="sharedpref" path="sms_queue.xml" />
+    <!-- Holds the OpenRouter API key. A credential should not travel to
+         cloud backup; the few other settings here are trivial to redo. -->
+    <exclude domain="sharedpref" path="FlutterSharedPreferences.xml" />
 </full-backup-content>

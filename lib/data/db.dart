@@ -80,6 +80,22 @@ class FoodEntries extends Table {
   /// still useful without one.
   RealColumn get calories => real().nullable()();
   RealColumn get servings => real().withDefault(const Constant(1))();
+
+  /// Macros for a single serving, in grams. Null when unknown.
+  RealColumn get protein => real().nullable()();
+  RealColumn get carbs => real().nullable()();
+  RealColumn get fat => real().nullable()();
+
+  /// What one serving means for this food ("1 cup", "2 pieces"), as stated
+  /// by whatever produced the estimate.
+  TextColumn get servingSize => text().nullable()();
+
+  /// Where the nutrition numbers came from: manual, table (the built-in
+  /// reference list) or ai (an OpenRouter model, whose id is kept so a
+  /// figure can be traced back to what produced it).
+  TextColumn get nutritionSource => text().nullable()();
+  TextColumn get nutritionModel => text().nullable()();
+
   TextColumn get note => text().nullable()();
   DateTimeColumn get eatenAt => dateTime()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -101,7 +117,7 @@ class AppDb extends _$AppDb {
   AppDb.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -124,6 +140,14 @@ class AppDb extends _$AppDb {
           }
           if (from < 7) {
             await m.createTable(foodEntries);
+          }
+          if (from < 8) {
+            await m.addColumn(foodEntries, foodEntries.protein);
+            await m.addColumn(foodEntries, foodEntries.carbs);
+            await m.addColumn(foodEntries, foodEntries.fat);
+            await m.addColumn(foodEntries, foodEntries.servingSize);
+            await m.addColumn(foodEntries, foodEntries.nutritionSource);
+            await m.addColumn(foodEntries, foodEntries.nutritionModel);
           }
         },
       );
@@ -342,6 +366,12 @@ class AppDb extends _$AppDb {
     required Meal meal,
     double? calories,
     required double servings,
+    double? protein,
+    double? carbs,
+    double? fat,
+    String? servingSize,
+    String? nutritionSource,
+    String? nutritionModel,
     String? note,
     required DateTime eatenAt,
   }) =>
@@ -351,6 +381,12 @@ class AppDb extends _$AppDb {
           meal: Value(meal),
           calories: Value(calories),
           servings: Value(servings),
+          protein: Value(protein),
+          carbs: Value(carbs),
+          fat: Value(fat),
+          servingSize: Value(servingSize),
+          nutritionSource: Value(nutritionSource),
+          nutritionModel: Value(nutritionModel),
           note: Value(note),
           eatenAt: Value(eatenAt),
         ),
@@ -358,6 +394,15 @@ class AppDb extends _$AppDb {
 
   Future<void> deleteFoodEntry(int id) =>
       (delete(foodEntries)..where((f) => f.id.equals(id))).go();
+
+  /// True when the same food is already logged at the same moment, so a
+  /// backup restored twice does not duplicate the log.
+  Future<bool> hasFoodEntry(String name, DateTime eatenAt) async {
+    final q = select(foodEntries)
+      ..where((f) => f.name.equals(name) & f.eatenAt.equals(eatenAt))
+      ..limit(1);
+    return (await q.get()).isNotEmpty;
+  }
 
   /// Marks all incoming messages from a sender as read.
   Future<void> markThreadRead(String sender) => (update(smsMessages)

@@ -2089,6 +2089,68 @@ class $FoodEntriesTable extends FoodEntries
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _proteinMeta = const VerificationMeta(
+    'protein',
+  );
+  @override
+  late final GeneratedColumn<double> protein = GeneratedColumn<double>(
+    'protein',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _carbsMeta = const VerificationMeta('carbs');
+  @override
+  late final GeneratedColumn<double> carbs = GeneratedColumn<double>(
+    'carbs',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fatMeta = const VerificationMeta('fat');
+  @override
+  late final GeneratedColumn<double> fat = GeneratedColumn<double>(
+    'fat',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _servingSizeMeta = const VerificationMeta(
+    'servingSize',
+  );
+  @override
+  late final GeneratedColumn<String> servingSize = GeneratedColumn<String>(
+    'serving_size',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nutritionSourceMeta = const VerificationMeta(
+    'nutritionSource',
+  );
+  @override
+  late final GeneratedColumn<String> nutritionSource = GeneratedColumn<String>(
+    'nutrition_source',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nutritionModelMeta = const VerificationMeta(
+    'nutritionModel',
+  );
+  @override
+  late final GeneratedColumn<String> nutritionModel = GeneratedColumn<String>(
+    'nutrition_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -2128,6 +2190,12 @@ class $FoodEntriesTable extends FoodEntries
     meal,
     calories,
     servings,
+    protein,
+    carbs,
+    fat,
+    servingSize,
+    nutritionSource,
+    nutritionModel,
     note,
     eatenAt,
     createdAt,
@@ -2165,6 +2233,51 @@ class $FoodEntriesTable extends FoodEntries
       context.handle(
         _servingsMeta,
         servings.isAcceptableOrUnknown(data['servings']!, _servingsMeta),
+      );
+    }
+    if (data.containsKey('protein')) {
+      context.handle(
+        _proteinMeta,
+        protein.isAcceptableOrUnknown(data['protein']!, _proteinMeta),
+      );
+    }
+    if (data.containsKey('carbs')) {
+      context.handle(
+        _carbsMeta,
+        carbs.isAcceptableOrUnknown(data['carbs']!, _carbsMeta),
+      );
+    }
+    if (data.containsKey('fat')) {
+      context.handle(
+        _fatMeta,
+        fat.isAcceptableOrUnknown(data['fat']!, _fatMeta),
+      );
+    }
+    if (data.containsKey('serving_size')) {
+      context.handle(
+        _servingSizeMeta,
+        servingSize.isAcceptableOrUnknown(
+          data['serving_size']!,
+          _servingSizeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('nutrition_source')) {
+      context.handle(
+        _nutritionSourceMeta,
+        nutritionSource.isAcceptableOrUnknown(
+          data['nutrition_source']!,
+          _nutritionSourceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('nutrition_model')) {
+      context.handle(
+        _nutritionModelMeta,
+        nutritionModel.isAcceptableOrUnknown(
+          data['nutrition_model']!,
+          _nutritionModelMeta,
+        ),
       );
     }
     if (data.containsKey('note')) {
@@ -2218,6 +2331,30 @@ class $FoodEntriesTable extends FoodEntries
         DriftSqlType.double,
         data['${effectivePrefix}servings'],
       )!,
+      protein: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}protein'],
+      ),
+      carbs: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}carbs'],
+      ),
+      fat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}fat'],
+      ),
+      servingSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}serving_size'],
+      ),
+      nutritionSource: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nutrition_source'],
+      ),
+      nutritionModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nutrition_model'],
+      ),
       note: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}note'],
@@ -2251,6 +2388,21 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
   /// still useful without one.
   final double? calories;
   final double servings;
+
+  /// Macros for a single serving, in grams. Null when unknown.
+  final double? protein;
+  final double? carbs;
+  final double? fat;
+
+  /// What one serving means for this food ("1 cup", "2 pieces"), as stated
+  /// by whatever produced the estimate.
+  final String? servingSize;
+
+  /// Where the nutrition numbers came from: manual, table (the built-in
+  /// reference list) or ai (an OpenRouter model, whose id is kept so a
+  /// figure can be traced back to what produced it).
+  final String? nutritionSource;
+  final String? nutritionModel;
   final String? note;
   final DateTime eatenAt;
   final DateTime createdAt;
@@ -2260,6 +2412,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
     required this.meal,
     this.calories,
     required this.servings,
+    this.protein,
+    this.carbs,
+    this.fat,
+    this.servingSize,
+    this.nutritionSource,
+    this.nutritionModel,
     this.note,
     required this.eatenAt,
     required this.createdAt,
@@ -2276,6 +2434,24 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
       map['calories'] = Variable<double>(calories);
     }
     map['servings'] = Variable<double>(servings);
+    if (!nullToAbsent || protein != null) {
+      map['protein'] = Variable<double>(protein);
+    }
+    if (!nullToAbsent || carbs != null) {
+      map['carbs'] = Variable<double>(carbs);
+    }
+    if (!nullToAbsent || fat != null) {
+      map['fat'] = Variable<double>(fat);
+    }
+    if (!nullToAbsent || servingSize != null) {
+      map['serving_size'] = Variable<String>(servingSize);
+    }
+    if (!nullToAbsent || nutritionSource != null) {
+      map['nutrition_source'] = Variable<String>(nutritionSource);
+    }
+    if (!nullToAbsent || nutritionModel != null) {
+      map['nutrition_model'] = Variable<String>(nutritionModel);
+    }
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
     }
@@ -2293,6 +2469,22 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
           ? const Value.absent()
           : Value(calories),
       servings: Value(servings),
+      protein: protein == null && nullToAbsent
+          ? const Value.absent()
+          : Value(protein),
+      carbs: carbs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(carbs),
+      fat: fat == null && nullToAbsent ? const Value.absent() : Value(fat),
+      servingSize: servingSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(servingSize),
+      nutritionSource: nutritionSource == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nutritionSource),
+      nutritionModel: nutritionModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nutritionModel),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       eatenAt: Value(eatenAt),
       createdAt: Value(createdAt),
@@ -2312,6 +2504,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
       ),
       calories: serializer.fromJson<double?>(json['calories']),
       servings: serializer.fromJson<double>(json['servings']),
+      protein: serializer.fromJson<double?>(json['protein']),
+      carbs: serializer.fromJson<double?>(json['carbs']),
+      fat: serializer.fromJson<double?>(json['fat']),
+      servingSize: serializer.fromJson<String?>(json['servingSize']),
+      nutritionSource: serializer.fromJson<String?>(json['nutritionSource']),
+      nutritionModel: serializer.fromJson<String?>(json['nutritionModel']),
       note: serializer.fromJson<String?>(json['note']),
       eatenAt: serializer.fromJson<DateTime>(json['eatenAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2328,6 +2526,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
       ),
       'calories': serializer.toJson<double?>(calories),
       'servings': serializer.toJson<double>(servings),
+      'protein': serializer.toJson<double?>(protein),
+      'carbs': serializer.toJson<double?>(carbs),
+      'fat': serializer.toJson<double?>(fat),
+      'servingSize': serializer.toJson<String?>(servingSize),
+      'nutritionSource': serializer.toJson<String?>(nutritionSource),
+      'nutritionModel': serializer.toJson<String?>(nutritionModel),
       'note': serializer.toJson<String?>(note),
       'eatenAt': serializer.toJson<DateTime>(eatenAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2340,6 +2544,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
     Meal? meal,
     Value<double?> calories = const Value.absent(),
     double? servings,
+    Value<double?> protein = const Value.absent(),
+    Value<double?> carbs = const Value.absent(),
+    Value<double?> fat = const Value.absent(),
+    Value<String?> servingSize = const Value.absent(),
+    Value<String?> nutritionSource = const Value.absent(),
+    Value<String?> nutritionModel = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? eatenAt,
     DateTime? createdAt,
@@ -2349,6 +2559,16 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
     meal: meal ?? this.meal,
     calories: calories.present ? calories.value : this.calories,
     servings: servings ?? this.servings,
+    protein: protein.present ? protein.value : this.protein,
+    carbs: carbs.present ? carbs.value : this.carbs,
+    fat: fat.present ? fat.value : this.fat,
+    servingSize: servingSize.present ? servingSize.value : this.servingSize,
+    nutritionSource: nutritionSource.present
+        ? nutritionSource.value
+        : this.nutritionSource,
+    nutritionModel: nutritionModel.present
+        ? nutritionModel.value
+        : this.nutritionModel,
     note: note.present ? note.value : this.note,
     eatenAt: eatenAt ?? this.eatenAt,
     createdAt: createdAt ?? this.createdAt,
@@ -2360,6 +2580,18 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
       meal: data.meal.present ? data.meal.value : this.meal,
       calories: data.calories.present ? data.calories.value : this.calories,
       servings: data.servings.present ? data.servings.value : this.servings,
+      protein: data.protein.present ? data.protein.value : this.protein,
+      carbs: data.carbs.present ? data.carbs.value : this.carbs,
+      fat: data.fat.present ? data.fat.value : this.fat,
+      servingSize: data.servingSize.present
+          ? data.servingSize.value
+          : this.servingSize,
+      nutritionSource: data.nutritionSource.present
+          ? data.nutritionSource.value
+          : this.nutritionSource,
+      nutritionModel: data.nutritionModel.present
+          ? data.nutritionModel.value
+          : this.nutritionModel,
       note: data.note.present ? data.note.value : this.note,
       eatenAt: data.eatenAt.present ? data.eatenAt.value : this.eatenAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -2374,6 +2606,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
           ..write('meal: $meal, ')
           ..write('calories: $calories, ')
           ..write('servings: $servings, ')
+          ..write('protein: $protein, ')
+          ..write('carbs: $carbs, ')
+          ..write('fat: $fat, ')
+          ..write('servingSize: $servingSize, ')
+          ..write('nutritionSource: $nutritionSource, ')
+          ..write('nutritionModel: $nutritionModel, ')
           ..write('note: $note, ')
           ..write('eatenAt: $eatenAt, ')
           ..write('createdAt: $createdAt')
@@ -2382,8 +2620,22 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, meal, calories, servings, note, eatenAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    meal,
+    calories,
+    servings,
+    protein,
+    carbs,
+    fat,
+    servingSize,
+    nutritionSource,
+    nutritionModel,
+    note,
+    eatenAt,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2393,6 +2645,12 @@ class FoodEntry extends DataClass implements Insertable<FoodEntry> {
           other.meal == this.meal &&
           other.calories == this.calories &&
           other.servings == this.servings &&
+          other.protein == this.protein &&
+          other.carbs == this.carbs &&
+          other.fat == this.fat &&
+          other.servingSize == this.servingSize &&
+          other.nutritionSource == this.nutritionSource &&
+          other.nutritionModel == this.nutritionModel &&
           other.note == this.note &&
           other.eatenAt == this.eatenAt &&
           other.createdAt == this.createdAt);
@@ -2404,6 +2662,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
   final Value<Meal> meal;
   final Value<double?> calories;
   final Value<double> servings;
+  final Value<double?> protein;
+  final Value<double?> carbs;
+  final Value<double?> fat;
+  final Value<String?> servingSize;
+  final Value<String?> nutritionSource;
+  final Value<String?> nutritionModel;
   final Value<String?> note;
   final Value<DateTime> eatenAt;
   final Value<DateTime> createdAt;
@@ -2413,6 +2677,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
     this.meal = const Value.absent(),
     this.calories = const Value.absent(),
     this.servings = const Value.absent(),
+    this.protein = const Value.absent(),
+    this.carbs = const Value.absent(),
+    this.fat = const Value.absent(),
+    this.servingSize = const Value.absent(),
+    this.nutritionSource = const Value.absent(),
+    this.nutritionModel = const Value.absent(),
     this.note = const Value.absent(),
     this.eatenAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2423,6 +2693,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
     required Meal meal,
     this.calories = const Value.absent(),
     this.servings = const Value.absent(),
+    this.protein = const Value.absent(),
+    this.carbs = const Value.absent(),
+    this.fat = const Value.absent(),
+    this.servingSize = const Value.absent(),
+    this.nutritionSource = const Value.absent(),
+    this.nutritionModel = const Value.absent(),
     this.note = const Value.absent(),
     required DateTime eatenAt,
     this.createdAt = const Value.absent(),
@@ -2435,6 +2711,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
     Expression<int>? meal,
     Expression<double>? calories,
     Expression<double>? servings,
+    Expression<double>? protein,
+    Expression<double>? carbs,
+    Expression<double>? fat,
+    Expression<String>? servingSize,
+    Expression<String>? nutritionSource,
+    Expression<String>? nutritionModel,
     Expression<String>? note,
     Expression<DateTime>? eatenAt,
     Expression<DateTime>? createdAt,
@@ -2445,6 +2727,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
       if (meal != null) 'meal': meal,
       if (calories != null) 'calories': calories,
       if (servings != null) 'servings': servings,
+      if (protein != null) 'protein': protein,
+      if (carbs != null) 'carbs': carbs,
+      if (fat != null) 'fat': fat,
+      if (servingSize != null) 'serving_size': servingSize,
+      if (nutritionSource != null) 'nutrition_source': nutritionSource,
+      if (nutritionModel != null) 'nutrition_model': nutritionModel,
       if (note != null) 'note': note,
       if (eatenAt != null) 'eaten_at': eatenAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -2457,6 +2745,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
     Value<Meal>? meal,
     Value<double?>? calories,
     Value<double>? servings,
+    Value<double?>? protein,
+    Value<double?>? carbs,
+    Value<double?>? fat,
+    Value<String?>? servingSize,
+    Value<String?>? nutritionSource,
+    Value<String?>? nutritionModel,
     Value<String?>? note,
     Value<DateTime>? eatenAt,
     Value<DateTime>? createdAt,
@@ -2467,6 +2761,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
       meal: meal ?? this.meal,
       calories: calories ?? this.calories,
       servings: servings ?? this.servings,
+      protein: protein ?? this.protein,
+      carbs: carbs ?? this.carbs,
+      fat: fat ?? this.fat,
+      servingSize: servingSize ?? this.servingSize,
+      nutritionSource: nutritionSource ?? this.nutritionSource,
+      nutritionModel: nutritionModel ?? this.nutritionModel,
       note: note ?? this.note,
       eatenAt: eatenAt ?? this.eatenAt,
       createdAt: createdAt ?? this.createdAt,
@@ -2493,6 +2793,24 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
     if (servings.present) {
       map['servings'] = Variable<double>(servings.value);
     }
+    if (protein.present) {
+      map['protein'] = Variable<double>(protein.value);
+    }
+    if (carbs.present) {
+      map['carbs'] = Variable<double>(carbs.value);
+    }
+    if (fat.present) {
+      map['fat'] = Variable<double>(fat.value);
+    }
+    if (servingSize.present) {
+      map['serving_size'] = Variable<String>(servingSize.value);
+    }
+    if (nutritionSource.present) {
+      map['nutrition_source'] = Variable<String>(nutritionSource.value);
+    }
+    if (nutritionModel.present) {
+      map['nutrition_model'] = Variable<String>(nutritionModel.value);
+    }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
@@ -2513,6 +2831,12 @@ class FoodEntriesCompanion extends UpdateCompanion<FoodEntry> {
           ..write('meal: $meal, ')
           ..write('calories: $calories, ')
           ..write('servings: $servings, ')
+          ..write('protein: $protein, ')
+          ..write('carbs: $carbs, ')
+          ..write('fat: $fat, ')
+          ..write('servingSize: $servingSize, ')
+          ..write('nutritionSource: $nutritionSource, ')
+          ..write('nutritionModel: $nutritionModel, ')
           ..write('note: $note, ')
           ..write('eatenAt: $eatenAt, ')
           ..write('createdAt: $createdAt')
@@ -3553,6 +3877,12 @@ typedef $$FoodEntriesTableCreateCompanionBuilder =
       required Meal meal,
       Value<double?> calories,
       Value<double> servings,
+      Value<double?> protein,
+      Value<double?> carbs,
+      Value<double?> fat,
+      Value<String?> servingSize,
+      Value<String?> nutritionSource,
+      Value<String?> nutritionModel,
       Value<String?> note,
       required DateTime eatenAt,
       Value<DateTime> createdAt,
@@ -3564,6 +3894,12 @@ typedef $$FoodEntriesTableUpdateCompanionBuilder =
       Value<Meal> meal,
       Value<double?> calories,
       Value<double> servings,
+      Value<double?> protein,
+      Value<double?> carbs,
+      Value<double?> fat,
+      Value<String?> servingSize,
+      Value<String?> nutritionSource,
+      Value<String?> nutritionModel,
       Value<String?> note,
       Value<DateTime> eatenAt,
       Value<DateTime> createdAt,
@@ -3601,6 +3937,36 @@ class $$FoodEntriesTableFilterComposer
 
   ColumnFilters<double> get servings => $composableBuilder(
     column: $table.servings,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get protein => $composableBuilder(
+    column: $table.protein,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get carbs => $composableBuilder(
+    column: $table.carbs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get fat => $composableBuilder(
+    column: $table.fat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get servingSize => $composableBuilder(
+    column: $table.servingSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nutritionSource => $composableBuilder(
+    column: $table.nutritionSource,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nutritionModel => $composableBuilder(
+    column: $table.nutritionModel,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3654,6 +4020,36 @@ class $$FoodEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get protein => $composableBuilder(
+    column: $table.protein,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get carbs => $composableBuilder(
+    column: $table.carbs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get fat => $composableBuilder(
+    column: $table.fat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get servingSize => $composableBuilder(
+    column: $table.servingSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nutritionSource => $composableBuilder(
+    column: $table.nutritionSource,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nutritionModel => $composableBuilder(
+    column: $table.nutritionModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get note => $composableBuilder(
     column: $table.note,
     builder: (column) => ColumnOrderings(column),
@@ -3693,6 +4089,30 @@ class $$FoodEntriesTableAnnotationComposer
 
   GeneratedColumn<double> get servings =>
       $composableBuilder(column: $table.servings, builder: (column) => column);
+
+  GeneratedColumn<double> get protein =>
+      $composableBuilder(column: $table.protein, builder: (column) => column);
+
+  GeneratedColumn<double> get carbs =>
+      $composableBuilder(column: $table.carbs, builder: (column) => column);
+
+  GeneratedColumn<double> get fat =>
+      $composableBuilder(column: $table.fat, builder: (column) => column);
+
+  GeneratedColumn<String> get servingSize => $composableBuilder(
+    column: $table.servingSize,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get nutritionSource => $composableBuilder(
+    column: $table.nutritionSource,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get nutritionModel => $composableBuilder(
+    column: $table.nutritionModel,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
@@ -3737,6 +4157,12 @@ class $$FoodEntriesTableTableManager
                 Value<Meal> meal = const Value.absent(),
                 Value<double?> calories = const Value.absent(),
                 Value<double> servings = const Value.absent(),
+                Value<double?> protein = const Value.absent(),
+                Value<double?> carbs = const Value.absent(),
+                Value<double?> fat = const Value.absent(),
+                Value<String?> servingSize = const Value.absent(),
+                Value<String?> nutritionSource = const Value.absent(),
+                Value<String?> nutritionModel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> eatenAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3746,6 +4172,12 @@ class $$FoodEntriesTableTableManager
                 meal: meal,
                 calories: calories,
                 servings: servings,
+                protein: protein,
+                carbs: carbs,
+                fat: fat,
+                servingSize: servingSize,
+                nutritionSource: nutritionSource,
+                nutritionModel: nutritionModel,
                 note: note,
                 eatenAt: eatenAt,
                 createdAt: createdAt,
@@ -3757,6 +4189,12 @@ class $$FoodEntriesTableTableManager
                 required Meal meal,
                 Value<double?> calories = const Value.absent(),
                 Value<double> servings = const Value.absent(),
+                Value<double?> protein = const Value.absent(),
+                Value<double?> carbs = const Value.absent(),
+                Value<double?> fat = const Value.absent(),
+                Value<String?> servingSize = const Value.absent(),
+                Value<String?> nutritionSource = const Value.absent(),
+                Value<String?> nutritionModel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 required DateTime eatenAt,
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3766,6 +4204,12 @@ class $$FoodEntriesTableTableManager
                 meal: meal,
                 calories: calories,
                 servings: servings,
+                protein: protein,
+                carbs: carbs,
+                fat: fat,
+                servingSize: servingSize,
+                nutritionSource: nutritionSource,
+                nutritionModel: nutritionModel,
                 note: note,
                 eatenAt: eatenAt,
                 createdAt: createdAt,

@@ -5,8 +5,12 @@
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <exclude domain="sharedpref" path="sms_queue.xml" />
+        <!-- Holds the OpenRouter API key; kept out of cloud backup. -->
+        <exclude domain="sharedpref" path="FlutterSharedPreferences.xml" />
     </cloud-backup>
     <device-transfer>
+        <!-- A direct phone-to-phone move stays on the user's own devices,
+             so settings (including the API key) come along. -->
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <exclude domain="sharedpref" path="sms_queue.xml" />

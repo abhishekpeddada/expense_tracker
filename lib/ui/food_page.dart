@@ -17,6 +17,10 @@ final _timeFmt = DateFormat('h:mm a');
 double _calories(Iterable<FoodEntry> entries) => entries.fold(
     0.0, (sum, e) => sum + (e.calories ?? 0) * e.servings);
 
+/// Grams of one macro across a set of entries, counting servings.
+double _macro(Iterable<FoodEntry> entries, double? Function(FoodEntry) pick) =>
+    entries.fold(0.0, (sum, e) => sum + (pick(e) ?? 0) * e.servings);
+
 /// The Food tab: what was eaten on a given day, with a running dashboard
 /// built from the log.
 class FoodPage extends ConsumerStatefulWidget {
@@ -130,6 +134,10 @@ class _DaySummary extends StatelessWidget {
     final total = _calories(entries);
     final withoutCalories =
         entries.where((e) => e.calories == null).length;
+    final protein = _macro(entries, (e) => e.protein);
+    final carbs = _macro(entries, (e) => e.carbs);
+    final fat = _macro(entries, (e) => e.fat);
+    final macroTotal = protein + carbs + fat;
 
     return Card(
       child: Padding(
@@ -166,6 +174,17 @@ class _DaySummary extends StatelessWidget {
                 ),
               ],
             ),
+            if (protein + carbs + fat > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  children: [
+                    _Macro(label: 'Protein', grams: protein, of: macroTotal),
+                    _Macro(label: 'Carbs', grams: carbs, of: macroTotal),
+                    _Macro(label: 'Fat', grams: fat, of: macroTotal),
+                  ],
+                ),
+              ),
             if (entries.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -188,6 +207,35 @@ class _DaySummary extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One macro's weight and its share of the day's macro grams.
+class _Macro extends StatelessWidget {
+  final String label;
+  final double grams;
+
+  /// Total macro grams for the day, used for the share percentage.
+  final double of;
+  const _Macro({required this.label, required this.grams, required this.of});
+
+  @override
+  Widget build(BuildContext context) {
+    final share = of <= 0 ? 0 : (grams / of * 100).round();
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text('${grams.round()} g',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          Text('$share%', style: Theme.of(context).textTheme.bodySmall),
+        ],
       ),
     );
   }
@@ -232,6 +280,12 @@ class _QuickAdd extends ConsumerWidget {
                           meal: MealLabel.forHour(now.hour),
                           calories: Value(e.calories),
                           servings: Value(e.servings),
+                          protein: Value(e.protein),
+                          carbs: Value(e.carbs),
+                          fat: Value(e.fat),
+                          servingSize: Value(e.servingSize),
+                          nutritionSource: Value(e.nutritionSource),
+                          nutritionModel: Value(e.nutritionModel),
                           eatenAt: DateTime(day.year, day.month, day.day,
                               now.hour, now.minute),
                         ),
@@ -300,6 +354,12 @@ class _FoodTile extends ConsumerWidget {
     final kcal = (entry.calories ?? 0) * entry.servings;
     final servingsLabel =
         entry.servings == 1 ? null : '${_trim(entry.servings)} servings';
+    final macros = [
+      if (entry.protein != null) 'P ${(entry.protein! * entry.servings).round()}g',
+      if (entry.carbs != null) 'C ${(entry.carbs! * entry.servings).round()}g',
+      if (entry.fat != null) 'F ${(entry.fat! * entry.servings).round()}g',
+    ];
+    final macrosLabel = macros.isEmpty ? null : macros.join(' ');
 
     return Dismissible(
       key: ValueKey('food-${entry.id}'),
@@ -325,6 +385,7 @@ class _FoodTile extends ConsumerWidget {
         subtitle: Text([
           _timeFmt.format(entry.eatenAt),
           ?servingsLabel,
+          ?macrosLabel,
           ?entry.note,
         ].join(' · ')),
         trailing: Text(

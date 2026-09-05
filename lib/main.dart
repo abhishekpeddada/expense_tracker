@@ -1,42 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/providers.dart';
 import 'services/budget_alerts.dart';
+import 'services/settings_service.dart';
 import 'services/sms_service.dart';
 import 'ui/accounts_page.dart';
-import 'ui/backup_page.dart';
 import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/food_page.dart';
 import 'ui/messages_page.dart';
+import 'ui/settings_page.dart';
 import 'ui/transactions_page.dart';
-
-/// True = force the pitch-black (AMOLED) dark theme; false = follow system.
-final pitchBlackProvider =
-    NotifierProvider<PitchBlackNotifier, bool>(PitchBlackNotifier.new);
-
-class PitchBlackNotifier extends Notifier<bool> {
-  static const _key = 'pitchBlack';
-
-  @override
-  bool build() => _prefs?.getBool(_key) ?? false;
-
-  static SharedPreferences? _prefs;
-  static Future<void> load() async {
-    _prefs = await SharedPreferences.getInstance();
-  }
-
-  void toggle() {
-    state = !state;
-    _prefs?.setBool(_key, state);
-  }
-}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await PitchBlackNotifier.load();
+  await SettingsNotifier.load();
   runApp(const ProviderScope(child: ExpenseTrackerApp()));
 }
 
@@ -46,7 +25,7 @@ class ExpenseTrackerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const seed = Colors.teal;
-    final pitchBlack = ref.watch(pitchBlackProvider);
+    final pitchBlack = ref.watch(settingsProvider).pitchBlack;
 
     final darkScheme =
         ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
@@ -129,7 +108,6 @@ class _HomeShellState extends ConsumerState<HomeShell>
   @override
   Widget build(BuildContext context) {
     final uncategorized = ref.watch(uncategorizedProvider).valueOrNull ?? [];
-    final pitchBlack = ref.watch(pitchBlackProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -145,19 +123,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
               ),
             ),
           IconButton(
-            tooltip: 'Backup & restore',
-            icon: const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const BackupPage()),
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
             ),
-          ),
-          IconButton(
-            tooltip: pitchBlack ? 'Pitch black: on' : 'Pitch black: off',
-            icon: Icon(
-                pitchBlack ? Icons.dark_mode : Icons.dark_mode_outlined),
-            onPressed: () =>
-                ref.read(pitchBlackProvider.notifier).toggle(),
           ),
         ],
       ),
