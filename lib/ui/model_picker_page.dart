@@ -19,9 +19,23 @@ final _modelsProvider = FutureProvider.autoDispose<List<OpenRouterModel>>(
   },
 );
 
+/// Result of picking a model: the id, and whether it can take images.
+class ModelChoice {
+  final String id;
+  final bool acceptsImages;
+  const ModelChoice(this.id, this.acceptsImages);
+}
+
 class ModelPickerPage extends ConsumerStatefulWidget {
   final String selected;
-  const ModelPickerPage({super.key, required this.selected});
+
+  /// Opens with the vision filter already on, for the photo flow.
+  final bool visionOnly;
+  const ModelPickerPage({
+    super.key,
+    required this.selected,
+    this.visionOnly = false,
+  });
 
   @override
   ConsumerState<ModelPickerPage> createState() => _ModelPickerPageState();
@@ -31,6 +45,7 @@ class _ModelPickerPageState extends ConsumerState<ModelPickerPage> {
   final _search = TextEditingController();
   String _query = '';
   bool _freeOnly = false;
+  late bool _visionOnly = widget.visionOnly;
 
   @override
   void dispose() {
@@ -47,6 +62,7 @@ class _ModelPickerPageState extends ConsumerState<ModelPickerPage> {
     return [
       for (final m in models)
         if ((!_freeOnly || m.isFree) &&
+            (!_visionOnly || m.acceptsImages) &&
             terms.every((t) => m.searchable.contains(t)))
           m,
     ];
@@ -82,15 +98,22 @@ class _ModelPickerPageState extends ConsumerState<ModelPickerPage> {
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: FilterChip(
-                label: const Text('Free models only'),
-                selected: _freeOnly,
-                onSelected: (v) => setState(() => _freeOnly = v),
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('Free'),
+                  selected: _freeOnly,
+                  onSelected: (v) => setState(() => _freeOnly = v),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('Reads photos'),
+                  selected: _visionOnly,
+                  onSelected: (v) => setState(() => _visionOnly = v),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -123,7 +146,24 @@ class _ModelPickerPageState extends ConsumerState<ModelPickerPage> {
                     final m = shown[i - 1];
                     final isSelected = m.id == widget.selected;
                     return ListTile(
-                      title: Text(m.name),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(m.name,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          if (m.acceptsImages) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message: 'Can read photos',
+                              child: Icon(Icons.photo_camera_outlined,
+                                  size: 16,
+                                  color:
+                                      Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ],
+                      ),
                       subtitle: Text(
                         [m.id, m.priceLabel, m.contextLabel]
                             .where((s) => s.isNotEmpty)
@@ -136,7 +176,8 @@ class _ModelPickerPageState extends ConsumerState<ModelPickerPage> {
                               color: Theme.of(context).colorScheme.primary)
                           : null,
                       selected: isSelected,
-                      onTap: () => Navigator.pop(context, m.id),
+                      onTap: () => Navigator.pop(
+                          context, ModelChoice(m.id, m.acceptsImages)),
                     );
                   },
                 );

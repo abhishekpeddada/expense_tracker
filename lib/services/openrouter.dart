@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -14,6 +15,10 @@ class OpenRouterModel {
   final double? promptPrice;
   final double? completionPrice;
 
+  /// True when the model accepts images as input, which is what photo
+  /// logging needs. Text-only models reject the request outright.
+  final bool acceptsImages;
+
   const OpenRouterModel({
     required this.id,
     required this.name,
@@ -21,6 +26,7 @@ class OpenRouterModel {
     this.contextLength,
     this.promptPrice,
     this.completionPrice,
+    this.acceptsImages = false,
   });
 
   bool get isFree => (promptPrice ?? 0) == 0 && (completionPrice ?? 0) == 0;
@@ -54,8 +60,19 @@ class OpenRouterModel {
     double? price(Object? v) =>
         v == null ? null : double.tryParse(v.toString());
     final id = m['id'] as String? ?? '';
+    final architecture =
+        (m['architecture'] as Map?)?.cast<String, Object?>() ?? {};
+    // Newer entries list input_modalities; older ones only carry the
+    // combined modality string, so both are checked.
+    final modalities = architecture['input_modalities'];
+    final legacy = architecture['modality']?.toString() ?? '';
+    final acceptsImages = modalities is List
+        ? modalities.any((v) => v.toString() == 'image')
+        : legacy.split('->').first.contains('image');
+
     return OpenRouterModel(
       id: id,
+      acceptsImages: acceptsImages,
       name: (m['name'] as String?)?.trim().isNotEmpty == true
           ? m['name'] as String
           : id,
@@ -193,6 +210,72 @@ class OpenRouterClient {
     }
   }
 
+  /// Identifies the foods in a photo and estimates each one.
+  ///
+  /// A plate usually holds several things, so this returns a list rather
+  /// than a single estimate; the caller reviews it before anything is
+  /// logged. The image is sent inline as a data URI and is not stored
+  /// anywhere by this app.
+  Future<List<NutritionEstimate>> estimateFromPhoto(
+    Uint8List jpeg, {
+    String? note,
+  }) async {
+    try {
+      return await _photoOnce(jpeg, note: note, maxTokens: _photoTokens);
+    } on OpenRouterException catch (e) {
+      if (!e.truncated) rethrow;
+      return _photoOnce(jpeg, note: note, maxTokens: _photoTokens * 3);
+    }
+  }
+
+  /// Roomier than a name lookup: a plate can hold half a dozen items, each
+  /// with its own line of JSON.
+  static const _photoTokens = 2000;
+
+  Future<List<NutritionEstimate>> _photoOnce(
+    Uint8List jpeg, {
+    String? note,
+    required int maxTokens,
+  }) async {
+    late final http.Response res;
+    try {
+      res = await _http.post(
+        Uri.parse('$_base/chat/completions'),
+        headers: _headers,
+        body: jsonEncode({
+          'model': model,
+          'temperature': 0.1,
+          'max_tokens': maxTokens,
+          'reasoning': {'enabled': false},
+          'messages': [
+            {'role': 'system', 'content': photoSystemPrompt},
+            {
+              'role': 'user',
+              'content': [
+                {
+                  'type': 'text',
+                  'text': note == null || note.isEmpty
+                      ? 'What is in this photo?'
+                      : 'What is in this photo? Extra detail: $note',
+                },
+                {
+                  'type': 'image_url',
+                  'image_url': {
+                    'url': 'data:image/jpeg;base64,${base64Encode(jpeg)}',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    } catch (e) {
+      throw OpenRouterException('Could not reach OpenRouter: $e');
+    }
+    final content = parseCompletion(res.statusCode, res.body);
+    return parsePhotoEstimate(content, model: model);
+  }
+
   Future<NutritionEstimate> _estimateOnce(
     String food, {
     String? note,
@@ -255,6 +338,61 @@ class OpenRouterClient {
       'a quantity. If the input is not a food, reply {"unknown": true}. '
       'Answer immediately with the JSON object; do not think it through '
       'first and do not write anything before or after it.';
+
+  static const photoSystemPrompt =
+      'You identify food in photographs, including Indian dishes, and '
+      'estimate its nutrition. Reply with ONLY a JSON object, no prose and '
+      'no code fences: {"items": [ ... ]}. Each item is one distinct food '
+      'or drink visible in the photo, with these keys: name (string, short, '
+      'what the food is called), calories (number, kcal), protein_g '
+      '(number), carbs_g (number), fat_g (number), serving (string '
+      'describing the portion you can see, e.g. "1 cup" or "2 pieces"). '
+      'Estimate the portion from what is actually on the plate rather than '
+      'a standard serving. List the components separately - rice, curry and '
+      'salad are three items, not one. Add a top-level "note" (string, at '
+      'most 15 words) for anything you had to assume or could not see. If '
+      'the photo has no food in it, reply {"items": []}. Answer immediately '
+      'with the JSON object; do not think it through first.';
+
+  /// Reads the item list a vision model returns for a photo.
+  static List<NutritionEstimate> parsePhotoEstimate(String content,
+      {String? model}) {
+    final json = _extractJson(content);
+    if (json == null) {
+      throw const OpenRouterException(
+          'Could not read the model\'s answer as a list of foods.');
+    }
+    final items = json['items'];
+    if (items is! List) {
+      throw const OpenRouterException(
+          'The model did not return a list of foods.');
+    }
+    if (items.isEmpty) {
+      throw const OpenRouterException('No food was recognised in the photo.');
+    }
+
+    final sharedNote = _string(json['note']);
+    final results = <NutritionEstimate>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final map = item.cast<String, Object?>();
+      final name = _string(map['name']);
+      if (name == null) continue;
+      final estimate = _readFigures(
+        map,
+        name: name,
+        model: model,
+        source: NutritionEstimate.sourcePhoto,
+        note: _string(map['note']) ?? sharedNote,
+      );
+      results.add(estimate);
+    }
+    if (results.isEmpty) {
+      throw const OpenRouterException(
+          'The model listed no foods it could name.');
+    }
+    return results;
+  }
 
   static List<OpenRouterModel> parseModels(String body) {
     final decoded = jsonDecode(body);
@@ -330,7 +468,29 @@ class OpenRouterClient {
       throw const OpenRouterException('The model did not recognise that food.');
     }
 
-    double? num_(Object? v) {
+    final estimate = _readFigures(
+      json,
+      model: model,
+      source: NutritionEstimate.sourceAi,
+      note: _string(json['note']),
+    );
+    if (estimate.isEmpty) {
+      throw const OpenRouterException(
+          'The model did not return any nutrition figures.');
+    }
+    return estimate;
+  }
+
+  /// Pulls the nutrition numbers out of one JSON object, accepting both the
+  /// key names the prompt asks for and the bare ones models drift to.
+  static NutritionEstimate _readFigures(
+    Map<String, Object?> json, {
+    String? name,
+    String? model,
+    required String source,
+    String? note,
+  }) {
+    double? number(Object? v) {
       if (v is num) return v.toDouble();
       if (v is String) {
         final m = RegExp(r'-?\d+(\.\d+)?').firstMatch(v);
@@ -339,30 +499,25 @@ class OpenRouterClient {
       return null;
     }
 
-    // Accept both the requested key names and the bare ones models drift to.
     double? pick(List<String> keys) {
       for (final k in keys) {
-        final v = num_(json[k]);
+        final v = number(json[k]);
         if (v != null && v >= 0) return v;
       }
       return null;
     }
 
-    final estimate = NutritionEstimate(
+    return NutritionEstimate(
+      name: name,
       calories: pick(['calories', 'calories_kcal', 'kcal', 'energy_kcal']),
       protein: pick(['protein_g', 'protein', 'proteins_g']),
       carbs: pick(['carbs_g', 'carbs', 'carbohydrates_g', 'carbohydrates']),
       fat: pick(['fat_g', 'fat', 'fats_g', 'total_fat_g']),
       servingSize: _string(json['serving']) ?? _string(json['serving_size']),
-      source: NutritionEstimate.sourceAi,
+      source: source,
       model: model,
-      note: _string(json['note']),
+      note: note,
     );
-    if (estimate.isEmpty) {
-      throw const OpenRouterException(
-          'The model did not return any nutrition figures.');
-    }
-    return estimate;
   }
 
   static String? _string(Object? v) {

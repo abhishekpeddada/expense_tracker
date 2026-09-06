@@ -16,6 +16,12 @@ class AppSettings {
   /// the estimate button on the food form still works on demand.
   final bool autoEstimate;
 
+  /// Whether the chosen model accepts images, recorded when it is picked so
+  /// photo logging can warn before sending a photo somewhere it cannot go.
+  /// Unknown for a model that predates this setting, which is treated as
+  /// "try it and report what happens".
+  final bool? modelAcceptsImages;
+
   /// Force the pitch-black (AMOLED) dark theme instead of following system.
   final bool pitchBlack;
 
@@ -23,6 +29,7 @@ class AppSettings {
     this.openRouterKey = '',
     this.openRouterModel = OpenRouterClient.defaultModel,
     this.autoEstimate = true,
+    this.modelAcceptsImages,
     this.pitchBlack = false,
   });
 
@@ -32,12 +39,17 @@ class AppSettings {
     String? openRouterKey,
     String? openRouterModel,
     bool? autoEstimate,
+    bool? modelAcceptsImages,
+    bool clearModelAcceptsImages = false,
     bool? pitchBlack,
   }) =>
       AppSettings(
         openRouterKey: openRouterKey ?? this.openRouterKey,
         openRouterModel: openRouterModel ?? this.openRouterModel,
         autoEstimate: autoEstimate ?? this.autoEstimate,
+        modelAcceptsImages: clearModelAcceptsImages
+            ? null
+            : (modelAcceptsImages ?? this.modelAcceptsImages),
         pitchBlack: pitchBlack ?? this.pitchBlack,
       );
 }
@@ -46,6 +58,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
   static const _keyApi = 'openrouter.apiKey';
   static const _keyModel = 'openrouter.model';
   static const _keyAuto = 'openrouter.autoEstimate';
+
+  static const _keyVision = 'openrouter.modelAcceptsImages';
 
   /// Kept under its original name so the existing preference carries over.
   static const _keyPitchBlack = 'pitchBlack';
@@ -64,6 +78,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
         openRouterModel:
             _prefs?.getString(_keyModel) ?? OpenRouterClient.defaultModel,
         autoEstimate: _prefs?.getBool(_keyAuto) ?? true,
+        modelAcceptsImages: _prefs?.getBool(_keyVision),
         pitchBlack: _prefs?.getBool(_keyPitchBlack) ?? false,
       );
 
@@ -73,9 +88,20 @@ class SettingsNotifier extends Notifier<AppSettings> {
     _prefs?.setString(_keyApi, key);
   }
 
-  void setModel(String id) {
-    state = state.copyWith(openRouterModel: id);
+  /// [acceptsImages] comes from the model list when a model is picked
+  /// there; null means it was set some other way and is not known.
+  void setModel(String id, {bool? acceptsImages}) {
+    state = state.copyWith(
+      openRouterModel: id,
+      modelAcceptsImages: acceptsImages,
+      clearModelAcceptsImages: acceptsImages == null,
+    );
     _prefs?.setString(_keyModel, id);
+    if (acceptsImages == null) {
+      _prefs?.remove(_keyVision);
+    } else {
+      _prefs?.setBool(_keyVision, acceptsImages);
+    }
   }
 
   void setAutoEstimate(bool value) {

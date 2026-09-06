@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../nutrition/food_table.dart';
@@ -61,6 +63,20 @@ class NutritionLookup {
     final estimate = await client.estimate(name, note: note);
     _cache[key] = estimate;
     return estimate;
+  }
+
+  /// Identifies the foods in a photo. Throws when no key is configured,
+  /// since there is no offline equivalent of looking at a picture.
+  Future<List<NutritionEstimate>> fromPhoto(
+    Uint8List jpeg, {
+    String? note,
+  }) async {
+    final client = _client;
+    if (client == null) {
+      throw const OpenRouterException(
+          'Add an OpenRouter API key in Settings to read photos.');
+    }
+    return client.estimateFromPhoto(jpeg, note: note);
   }
 }
 

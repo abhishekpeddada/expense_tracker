@@ -2,6 +2,10 @@
 library;
 
 class NutritionEstimate {
+  /// What the food is. Null when the caller already knew — a lookup by name
+  /// echoes nothing back — and set when a photo was identified.
+  final String? name;
+
   /// Calories in one serving.
   final double? calories;
 
@@ -23,6 +27,7 @@ class NutritionEstimate {
   final String? note;
 
   const NutritionEstimate({
+    this.name,
     this.calories,
     this.protein,
     this.carbs,
@@ -41,6 +46,9 @@ class NutritionEstimate {
 
   /// Estimated by a model through OpenRouter.
   static const sourceAi = 'ai';
+
+  /// Identified by a vision model from a photo.
+  static const sourcePhoto = 'photo';
 
   bool get isEmpty =>
       calories == null && protein == null && carbs == null && fat == null;

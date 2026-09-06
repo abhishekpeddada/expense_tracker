@@ -2,12 +2,14 @@ import 'package:drift/drift.dart' show Value;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
 import 'food_entry_page.dart';
+import 'photo_food_page.dart';
 
 final _dayFmt = DateFormat('EEE, d MMM');
 final _timeFmt = DateFormat('h:mm a');
@@ -35,6 +37,38 @@ class _FoodPageState extends ConsumerState<FoodPage> {
 
   bool get _isToday => DateUtils.isSameDay(_day, DateTime.now());
 
+  /// Camera or gallery, then the review screen. Asked here rather than on
+  /// the next page so cancelling costs nothing.
+  Future<void> _logFromPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pick from gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PhotoFoodPage(source: source, day: _day),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dayEntries =
@@ -43,13 +77,27 @@ class _FoodPageState extends ConsumerState<FoodPage> {
         ref.watch(foodEntriesProvider).valueOrNull ?? const <FoodEntry>[];
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => FoodEntryPage(day: _day)),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('Add food'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'food-photo',
+            tooltip: 'Log from a photo',
+            onPressed: _logFromPhoto,
+            child: const Icon(Icons.photo_camera_outlined),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'food-add',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => FoodEntryPage(day: _day)),
+            ),
+            icon: const Icon(Icons.add),
+            label: const Text('Add food'),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),

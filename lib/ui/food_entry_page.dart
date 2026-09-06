@@ -263,8 +263,12 @@ class _FoodEntryPageState extends ConsumerState<FoodEntryPage> {
         : (_caloriesEditedByHand
             ? NutritionEstimate.sourceManual
             : _source ?? NutritionEstimate.sourceManual);
-    final model =
-        source == NutritionEstimate.sourceAi ? _model : null;
+    // A photo estimate names its model too, so both AI-derived sources keep
+    // the provenance.
+    final model = source == NutritionEstimate.sourceAi ||
+            source == NutritionEstimate.sourcePhoto
+        ? _model
+        : null;
 
     if (_isEdit) {
       await db.updateFoodEntry(
@@ -506,6 +510,8 @@ class _FoodEntryPageState extends ConsumerState<FoodEntryPage> {
       switch (_source) {
         NutritionEstimate.sourceAi =>
           'estimated by ${_model ?? 'a model'}',
+        NutritionEstimate.sourcePhoto =>
+          'read from a photo by ${_model ?? 'a model'}',
         NutritionEstimate.sourceTable => 'from the built-in list',
         NutritionEstimate.sourceManual => 'entered by hand',
         _ => '',

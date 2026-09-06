@@ -102,14 +102,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _pickModel() async {
     final settings = ref.read(settingsProvider);
-    final picked = await Navigator.push<String>(
+    final picked = await Navigator.push<ModelChoice>(
       context,
       MaterialPageRoute(
         builder: (_) => ModelPickerPage(selected: settings.openRouterModel),
       ),
     );
     if (picked != null) {
-      ref.read(settingsProvider.notifier).setModel(picked);
+      ref
+          .read(settingsProvider.notifier)
+          .setModel(picked.id, acceptsImages: picked.acceptsImages);
     }
   }
 
@@ -128,11 +130,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'One key powers two things: calories and macros worked out '
-              'automatically for whatever you log on the Food tab, and the '
-              'Assistant tab, where you can ask questions about your own '
-              'spending and eating. Without a key, food logging falls back '
-              'to a small built-in list and the Assistant is unavailable.',
+              'One key powers three things: calories and macros worked out '
+              'automatically for whatever you log on the Food tab, logging '
+              'a whole plate from a photo, and the Assistant tab, where you '
+              'can ask questions about your own spending and eating. '
+              'Photos need a model that reads images - those are marked '
+              'with a camera in the picker. Without a key, food logging '
+              'falls back to a small built-in list.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -204,7 +208,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               'The key is stored on this device only. It is sent to '
               'openrouter.ai and nowhere else, and is left out of backup '
               'files. A food lookup sends just the name and serving you '
-              'typed. The Assistant sends a summary of your transactions, '
+              'typed, and a photo lookup sends the downscaled picture. '
+              'The Assistant sends a summary of your transactions, '
               'accounts, budgets and food log — never raw SMS text — and '
               '"What gets sent" on that tab shows it in full.',
               style: theme.textTheme.bodySmall,
@@ -214,7 +219,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             leading: const Icon(Icons.memory_outlined),
             title: const Text('Model'),
             subtitle: Text('${settings.openRouterModel}\n'
-                'Used for both food lookups and the Assistant'),
+                '${switch (settings.modelAcceptsImages) {
+              true => 'Reads photos. Used for food lookups, photo logging '
+                  'and the Assistant',
+              false => 'Cannot read photos - pick a vision model for photo '
+                  'logging',
+              null => 'Used for food lookups and the Assistant',
+            }}'),
             isThreeLine: true,
             trailing: const Icon(Icons.chevron_right),
             onTap: _pickModel,
