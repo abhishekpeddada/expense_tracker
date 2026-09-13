@@ -266,6 +266,13 @@ class AppDb extends _$AppDb {
   Future<void> deleteThread(String sender) =>
       (delete(smsMessages)..where((m) => m.sender.equals(sender))).go();
 
+  /// Removes several conversations at once.
+  Future<void> deleteThreads(Iterable<String> senders) async {
+    final list = senders.toList();
+    if (list.isEmpty) return;
+    await (delete(smsMessages)..where((m) => m.sender.isIn(list))).go();
+  }
+
   /// Marks the newest incoming message of a thread unread again.
   Future<void> markThreadUnread(String sender) async {
     final newest = await (select(smsMessages)
@@ -458,4 +465,30 @@ class AppDb extends _$AppDb {
             m.read.equals(false) &
             m.outgoing.equals(false)))
       .write(const SmsMessagesCompanion(read: Value(true)));
+
+  /// Marks every incoming message from any of these senders as read, and
+  /// answers how many were actually changed so the result can be reported.
+  Future<int> markThreadsRead(Iterable<String> senders) async {
+    final list = senders.toList();
+    if (list.isEmpty) return 0;
+    return (update(smsMessages)
+          ..where((m) =>
+              m.sender.isIn(list) &
+              m.read.equals(false) &
+              m.outgoing.equals(false)))
+        .write(const SmsMessagesCompanion(read: Value(true)));
+  }
+
+  /// Marks every unread incoming message in the inbox as read.
+  Future<int> markAllRead() => (update(smsMessages)
+        ..where((m) => m.read.equals(false) & m.outgoing.equals(false)))
+      .write(const SmsMessagesCompanion(read: Value(true)));
+
+  /// Puts several conversations back to unread, one newest message each.
+  Future<void> markThreadsUnread(Iterable<String> senders) =>
+      transaction(() async {
+        for (final sender in senders) {
+          await markThreadUnread(sender);
+        }
+      });
 }
