@@ -77,7 +77,7 @@ class _AccountCard extends StatelessWidget {
     double monthSpend = 0;
     for (final t in a.transactions) {
       if (t.type == TxnType.debit &&
-          t.category != Categories.creditCardBill &&
+          !Categories.isInternal(t.category) &&
           t.occurredAt.year == now.year &&
           t.occurredAt.month == now.month) {
         monthSpend += t.amount;

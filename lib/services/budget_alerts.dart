@@ -23,7 +23,7 @@ class BudgetAlerts {
     final spend = <String, double>{};
     for (final t in txns) {
       if (t.type != TxnType.debit) continue;
-      if (t.category == null || t.category == Categories.creditCardBill) {
+      if (t.category == null || Categories.isInternal(t.category)) {
         continue;
       }
       if (t.occurredAt.year != now.year || t.occurredAt.month != now.month) {

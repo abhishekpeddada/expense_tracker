@@ -26,8 +26,11 @@ extension MealLabel on Meal {
 /// Where the money moved from/to.
 enum AccountKind { bank, creditCard, wallet, unknown }
 
-/// Spending categories. `creditCardBill` is special-cased: paying a credit
-/// card bill from a bank account should not double-count as spending.
+/// Spending categories.
+///
+/// Two of these move money between the user's own accounts rather than in
+/// or out of their pocket, and are left out of every total — see
+/// [internal].
 class Categories {
   static const food = 'Food & Dining';
   static const groceries = 'Groceries';
@@ -39,6 +42,12 @@ class Categories {
   static const education = 'Education';
   static const rent = 'Rent';
   static const creditCardBill = 'Credit Card Bill';
+
+  /// Money moved between two accounts the user owns. Nothing was spent or
+  /// earned, so it counts towards neither.
+  static const selfTransfer = 'Self Transfer';
+
+  /// Money sent to somebody else, which is real spending.
   static const transfer = 'Transfer';
   static const salary = 'Salary';
   static const refund = 'Refund';
@@ -55,9 +64,22 @@ class Categories {
     education,
     rent,
     creditCardBill,
+    selfTransfer,
     transfer,
     salary,
     refund,
     other,
   ];
+
+  /// Categories that shuffle money between the user's own accounts. Paying
+  /// a credit card bill moves money to the card, where the original
+  /// purchases were already counted; a self transfer moves money from one
+  /// pocket to another. Counting either would inflate both what was spent
+  /// and what came in.
+  static const internal = {creditCardBill, selfTransfer};
+
+  /// True when a transaction in this category should be left out of spend
+  /// and income totals.
+  static bool isInternal(String? category) =>
+      category != null && internal.contains(category);
 }

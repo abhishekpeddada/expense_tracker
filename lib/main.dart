@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/providers.dart';
 import 'services/budget_alerts.dart';
+import 'services/self_transfer.dart';
 import 'services/settings_service.dart';
 import 'services/sms_service.dart';
 import 'services/chat_service.dart';
@@ -93,7 +94,16 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final sms = ref.read(smsServiceProvider);
     sms.requestPermissions();
     sms.drainQueue();
-    BudgetAlerts(ref.read(dbProvider)).check();
+    _catchUp();
+  }
+
+  /// Housekeeping that runs whenever the app comes to the front: pair up
+  /// self transfers before budgets are checked, so money moved between the
+  /// user's own accounts never counts towards a budget.
+  Future<void> _catchUp() async {
+    final db = ref.read(dbProvider);
+    await SelfTransfers.apply(db);
+    await BudgetAlerts(db).check();
   }
 
   @override
@@ -107,7 +117,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (state == AppLifecycleState.resumed) {
       ref.read(smsServiceProvider).drainQueue();
       ref.invalidate(isDefaultSmsAppProvider);
-      BudgetAlerts(ref.read(dbProvider)).check();
+      _catchUp();
     }
   }
 

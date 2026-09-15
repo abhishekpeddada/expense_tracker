@@ -65,6 +65,11 @@ incomplete: an account whose bank does not send alerts will not appear, and
 cash spending is never captured. Say so when it matters to the answer.
 Categories the person has not set yet show as Uncategorized.
 
+Anything categorised Self Transfer or Credit Card Bill only moves money
+between accounts this person owns. It is already excluded from the spend
+and income totals below, and you must not treat it as money spent or
+earned either.
+
 Food entries are self-reported, and calorie figures are estimates. Give
 general observations about eating patterns; do not diagnose, prescribe a
 diet, or give medical advice.''';
@@ -102,13 +107,17 @@ diet, or give medical advice.''';
     }
 
     final spent = _spend(current);
-    final received = current
-        .where((t) => t.type == TxnType.credit)
-        .fold(0.0, (s, t) => s + t.amount);
+    final received = Insights.received(current);
+    final internal = Insights.internal(current);
     b.writeln('Spent ${_money(spent)} across '
-        '${current.where((t) => t.type == TxnType.debit).length} debits.');
+        '${current.where((t) => t.type == TxnType.debit && !Categories.isInternal(t.category)).length} debits.');
     b.writeln('Received ${_money(received)}.');
     b.writeln('Net ${_money(received - spent)}.');
+    if (internal > 0) {
+      b.writeln('${_money(internal)} moved between the person\'s own '
+          'accounts (self transfers and credit card bill payments). That is '
+          'in neither figure above - it was not spent or earned.');
+    }
 
     final cats = Insights.byCategory(current).entries.toList()
       ..sort((x, y) => y.value.compareTo(x.value));
@@ -263,7 +272,7 @@ diet, or give medical advice.''';
 
   static double _spend(Iterable<Transaction> txns) => txns
       .where((t) =>
-          t.type == TxnType.debit && t.category != Categories.creditCardBill)
+          t.type == TxnType.debit && !Categories.isInternal(t.category))
       .fold(0.0, (sum, t) => sum + t.amount);
 
   static double _macro(

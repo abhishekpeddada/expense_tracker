@@ -57,13 +57,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     t.occurredAt.month == selected.month)
                 .toList();
 
-        double spent = 0, received = 0, ccSpent = 0;
+        double spent = 0, received = 0, ccSpent = 0, internal = 0;
         final byCategory = <String, double>{};
         for (final t in monthTxns) {
+          // Self transfers and credit card bill payments move money between
+          // the user's own accounts. Counting them would inflate both what
+          // was spent and what came in, so they are tallied separately.
+          if (Categories.isInternal(t.category)) {
+            internal += t.amount;
+            continue;
+          }
           if (t.type == TxnType.debit) {
-            // Credit card bill payments move money to the card, not out of
-            // your pocket twice — exclude them from "spent".
-            if (t.category == Categories.creditCardBill) continue;
             spent += t.amount;
             if (t.accountKind == AccountKind.creditCard) ccSpent += t.amount;
             final c = t.category ?? 'Uncategorized';
@@ -137,6 +141,25 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               icon: Icons.credit_card,
               expand: false,
             ),
+            if (internal > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.swap_horiz,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${_rupee.format(internal)} moved between your own '
+                        'accounts. Not counted as spent or received.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 20),
             _InsightsCard(
               insights: Insights.forMonth(

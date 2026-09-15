@@ -41,7 +41,20 @@ class Recurring {
 class Insights {
   static double _spend(Iterable<Transaction> txns) => txns
       .where((t) =>
-          t.type == TxnType.debit && t.category != Categories.creditCardBill)
+          t.type == TxnType.debit && !Categories.isInternal(t.category))
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  /// Money genuinely coming in, so a transfer from the user's own other
+  /// account does not read as income.
+  static double received(Iterable<Transaction> txns) => txns
+      .where((t) =>
+          t.type == TxnType.credit && !Categories.isInternal(t.category))
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  /// What the totals above deliberately leave out, so it can be shown
+  /// rather than silently vanishing.
+  static double internal(Iterable<Transaction> txns) => txns
+      .where((t) => Categories.isInternal(t.category))
       .fold(0.0, (sum, t) => sum + t.amount);
 
   static List<Transaction> _inMonth(
@@ -56,7 +69,7 @@ class Insights {
     final out = <String, double>{};
     for (final t in txns) {
       if (t.type != TxnType.debit) continue;
-      if (t.category == Categories.creditCardBill) continue;
+      if (Categories.isInternal(t.category)) continue;
       final c = t.category ?? 'Uncategorized';
       out[c] = (out[c] ?? 0) + t.amount;
     }
@@ -144,7 +157,8 @@ class Insights {
     }
 
     final biggest = current
-        .where((t) => t.type == TxnType.debit)
+        .where((t) =>
+            t.type == TxnType.debit && !Categories.isInternal(t.category))
         .fold<Transaction?>(
             null, (a, b) => a == null || b.amount > a.amount ? b : a);
     if (biggest != null && biggest.merchant != null) {
@@ -154,9 +168,7 @@ class Insights {
       ));
     }
 
-    final received = current
-        .where((t) => t.type == TxnType.credit)
-        .fold(0.0, (s, t) => s + t.amount);
+    final received = Insights.received(current);
     if (received > 0 && spent > 0) {
       final net = received - spent;
       out.add(Insight(
