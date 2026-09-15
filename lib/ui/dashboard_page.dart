@@ -8,6 +8,7 @@ import '../data/providers.dart';
 import '../models/models.dart';
 import '../services/insights.dart';
 import 'budgets_page.dart';
+import 'self_transfers_page.dart';
 
 final _rupee = NumberFormat.currency(
     locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -161,6 +162,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
             const SizedBox(height: 20),
+            const _SelfTransferPrompt(),
             _InsightsCard(
               insights: Insights.forMonth(
                   list, _allTime ? DateTime(now.year, now.month) : selected!),
@@ -195,6 +197,38 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Offers to fix pairs that look like self transfers but are filed under
+/// something else, and so are still inflating the totals above.
+class _SelfTransferPrompt extends ConsumerWidget {
+  const _SelfTransferPrompt();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final matches = ref.watch(selfTransferSuggestionsProvider);
+    if (matches.isEmpty) return const SizedBox.shrink();
+
+    final total = matches.fold<double>(0, (sum, m) => sum + m.amount);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: scheme.secondaryContainer,
+      child: ListTile(
+        leading: Icon(Icons.swap_horiz, color: scheme.onSecondaryContainer),
+        title: Text('${matches.length} possible self '
+            'transfer${matches.length == 1 ? '' : 's'}'),
+        subtitle: Text(
+            '${_rupee.format(total)} that may be money moved between your '
+            'own accounts, still counted as spending'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SelfTransfersPage()),
+        ),
+      ),
     );
   }
 }

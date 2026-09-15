@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../parsing/merchant.dart';
 import '../parsing/sms_parser.dart';
 import '../services/categorization.dart';
+import '../services/self_transfer.dart';
 import 'db.dart';
 
 final dbProvider = Provider<AppDb>((ref) {
@@ -46,6 +47,15 @@ final foodEntriesProvider = StreamProvider<List<FoodEntry>>(
 final foodForDayProvider =
     StreamProvider.family<List<FoodEntry>, DateTime>((ref, day) {
   return ref.watch(dbProvider).watchFoodForDay(day);
+});
+
+/// Pairs that look like money moved between the user's own accounts and
+/// still carry a category saying otherwise. Anything unambiguous is
+/// labelled automatically and never reaches here.
+final selfTransferSuggestionsProvider =
+    Provider<List<SelfTransferMatch>>((ref) {
+  final txns = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  return SelfTransfers.suggestions(txns);
 });
 
 /// A bank account / credit card derived from transaction data. There is no

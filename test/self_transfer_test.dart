@@ -197,6 +197,69 @@ void main() {
     });
   });
 
+  group('pairs that already carry a category', () {
+    SelfTransferMatch pair(String? debitCategory, String? creditCategory) =>
+        SelfTransfers.detect([
+          txn(id: 1, amount: 900, type: TxnType.debit, bank: 'HDFC',
+              tail: '1111', category: debitCategory, at: noon),
+          txn(
+              id: 2,
+              amount: 900,
+              type: TxnType.credit,
+              bank: 'ICICI',
+              tail: '2222',
+              category: creditCategory,
+              at: noon.add(const Duration(minutes: 4))),
+        ]).single;
+
+    test('Other says nothing, so it is relabelled without asking', () {
+      expect(pair(Categories.other, Categories.other).canApplySilently,
+          isTrue);
+      expect(pair(null, Categories.other).canApplySilently, isTrue);
+    });
+
+    test('a real category is never overwritten silently', () {
+      expect(pair(Categories.rent, null).canApplySilently, isFalse);
+      expect(pair(null, Categories.salary).canApplySilently, isFalse);
+    });
+
+    test('Transfer and Refund are offered, ticked, for review', () {
+      expect(pair(Categories.transfer, Categories.refund).isLikely, isTrue);
+      expect(pair(Categories.transfer, Categories.refund).canApplySilently,
+          isFalse);
+    });
+
+    test('a deliberate category is shown unticked', () {
+      expect(pair(Categories.rent, Categories.refund).isLikely, isFalse);
+    });
+
+    test('a pair already labelled is settled and drops off the list', () {
+      final settled =
+          pair(Categories.selfTransfer, Categories.selfTransfer);
+      expect(settled.isSettled, isTrue);
+      expect(
+        SelfTransfers.suggestions([
+          txn(id: 1, amount: 900, type: TxnType.debit, bank: 'HDFC',
+              tail: '1111', category: Categories.selfTransfer, at: noon),
+          txn(
+              id: 2,
+              amount: 900,
+              type: TxnType.credit,
+              bank: 'ICICI',
+              tail: '2222',
+              category: Categories.selfTransfer,
+              at: noon.add(const Duration(minutes: 4))),
+        ]),
+        isEmpty,
+      );
+    });
+
+    test('a half-labelled pair still needs review', () {
+      expect(pair(Categories.selfTransfer, Categories.refund).isSettled,
+          isFalse);
+    });
+  });
+
   group('labelling detected pairs', () {
     late AppDb db;
     setUp(() => db = AppDb.forTesting(NativeDatabase.memory()));
@@ -238,6 +301,58 @@ void main() {
 
       final all = await db.watchTransactions().first;
       expect(all.every((t) => t.category == Categories.selfTransfer), isTrue);
+    });
+
+    test('relabels a pair filed under Other without asking', () async {
+      await record(
+          amount: 5000,
+          type: TxnType.debit,
+          bank: 'HDFC',
+          tail: '1111',
+          category: Categories.other,
+          at: noon);
+      await record(
+          amount: 5000,
+          type: TxnType.credit,
+          bank: 'ICICI',
+          tail: '2222',
+          category: Categories.other,
+          at: noon.add(const Duration(minutes: 2)));
+
+      expect(await SelfTransfers.apply(db), 1);
+      final all = await db.watchTransactions().first;
+      expect(all.every((t) => t.category == Categories.selfTransfer), isTrue);
+    });
+
+    test('a categorized pair is offered for review instead', () async {
+      await record(
+          amount: 5000,
+          type: TxnType.debit,
+          bank: 'HDFC',
+          tail: '1111',
+          category: Categories.transfer,
+          at: noon);
+      await record(
+          amount: 5000,
+          type: TxnType.credit,
+          bank: 'ICICI',
+          tail: '2222',
+          category: Categories.refund,
+          at: noon.add(const Duration(minutes: 2)));
+
+      expect(await SelfTransfers.apply(db), 0);
+
+      final all = await db.watchTransactions().first;
+      final suggestions = SelfTransfers.suggestions(all);
+      expect(suggestions, hasLength(1));
+      expect(suggestions.single.isLikely, isTrue);
+
+      // Confirming from the review screen overrides both categories.
+      await SelfTransfers.label(db, suggestions.single);
+      final after = await db.watchTransactions().first;
+      expect(after.every((t) => t.category == Categories.selfTransfer),
+          isTrue);
+      expect(SelfTransfers.suggestions(after), isEmpty);
     });
 
     test('never overwrites a category already set', () async {
