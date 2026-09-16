@@ -78,8 +78,49 @@ class Categories {
   /// and what came in.
   static const internal = {creditCardBill, selfTransfer};
 
+  /// Spellings people actually type for the two internal categories.
+  ///
+  /// Categories are free text — the picker offers the list above but does
+  /// not insist on it — so "Self transfer", "self transfers" and "Credit
+  /// card bills" all reach the database as distinct strings. Comparing them
+  /// literally meant a category that plainly says "this is my own money
+  /// moving" still counted as spending.
+  static const _internalAliases = {
+    'self transfer',
+    'selftransfer',
+    'transfer to self',
+    'own transfer',
+    'own account transfer',
+    'account transfer',
+    'internal transfer',
+    'credit card bill',
+    'credit card payment',
+    'card bill',
+    'cc bill',
+  };
+
+  /// Case, spacing, punctuation and a trailing plural all removed, so
+  /// "Credit card bills" and "Credit Card Bill" compare equal.
+  static String _canonical(String category) {
+    final stripped =
+        category.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return stripped.endsWith('s')
+        ? stripped.substring(0, stripped.length - 1)
+        : stripped;
+  }
+
+  static final Set<String> _internalKeys = {
+    for (final c in internal) _canonical(c),
+    for (final c in _internalAliases) _canonical(c),
+  };
+
   /// True when a transaction in this category should be left out of spend
   /// and income totals.
   static bool isInternal(String? category) =>
-      category != null && internal.contains(category);
+      category != null && _internalKeys.contains(_canonical(category));
+
+  /// Compares a free-text category against one of the names above, ignoring
+  /// case, spacing and a trailing plural.
+  static bool same(String? category, String name) =>
+      category != null && _canonical(category) == _canonical(name);
 }

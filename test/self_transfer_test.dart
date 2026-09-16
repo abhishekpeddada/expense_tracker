@@ -87,6 +87,55 @@ void main() {
     });
   });
 
+  group('categories people actually type', () {
+    // Categories are free text, so the exact spelling in the database is
+    // whatever was typed. These are the real ones from a live install.
+    test('a lowercase t still counts as internal', () {
+      expect(Categories.isInternal('Self transfer'), isTrue);
+      expect(Categories.isInternal('self transfer'), isTrue);
+      expect(Categories.isInternal('SELF TRANSFER'), isTrue);
+    });
+
+    test('a plural still counts as internal', () {
+      expect(Categories.isInternal('Credit card bills'), isTrue);
+      expect(Categories.isInternal('Self transfers'), isTrue);
+    });
+
+    test('spacing and punctuation do not matter', () {
+      expect(Categories.isInternal('SelfTransfer'), isTrue);
+      expect(Categories.isInternal('Credit-Card Bill'), isTrue);
+    });
+
+    test('common wordings are recognised', () {
+      expect(Categories.isInternal('Credit card payment'), isTrue);
+      expect(Categories.isInternal('CC bill'), isTrue);
+      expect(Categories.isInternal('Internal transfer'), isTrue);
+    });
+
+    test('a real spending category is untouched', () {
+      expect(Categories.isInternal('Transfer'), isFalse);
+      expect(Categories.isInternal('Transfers'), isFalse);
+      expect(Categories.isInternal('Bills & Utilities'), isFalse);
+      expect(Categories.isInternal('Pg'), isFalse);
+      expect(Categories.isInternal('Crocs'), isFalse);
+      expect(Categories.isInternal(''), isFalse);
+    });
+
+    test("a hand-typed self transfer drops out of the month's spending", () {
+      final txns = [
+        txn(id: 1, amount: 93000, type: TxnType.debit, bank: 'HDFC',
+            category: 'Self transfer'),
+        txn(id: 2, amount: 34467, type: TxnType.debit, bank: 'HDFC',
+            category: 'Credit card bills'),
+        txn(id: 3, amount: 21000, type: TxnType.debit, bank: 'HDFC',
+            category: 'Pg'),
+      ];
+      expect(Insights.monthlyTotals(txns, months: 1).single.value, 21000);
+      expect(Insights.byCategory(txns).keys, ['Pg']);
+      expect(Insights.internal(txns), 127467);
+    });
+  });
+
   group('detecting a self transfer', () {
     test('matches an identical amount landing on another account', () {
       final matches = SelfTransfers.detect([

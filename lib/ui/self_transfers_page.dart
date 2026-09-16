@@ -250,7 +250,7 @@ class _Leg extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        if (category != null && category != Categories.selfTransfer)
+        if (category != null && !Categories.isInternal(category))
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: Chip(

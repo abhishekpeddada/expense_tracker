@@ -15,10 +15,11 @@ class SelfTransferMatch {
 
   double get amount => debit.amount;
 
-  /// Already labelled, so there is nothing to review.
+  /// Already counted as internal on both sides, so there is nothing to
+  /// review. However the user spelled it, it is already excluded.
   bool get isSettled =>
-      debit.category == Categories.selfTransfer &&
-      credit.category == Categories.selfTransfer;
+      Categories.isInternal(debit.category) &&
+      Categories.isInternal(credit.category);
 
   /// Safe to label without asking: neither side carries a category that
   /// says anything. Null means nobody has decided, and Other is what gets
@@ -51,16 +52,16 @@ class SelfTransfers {
   /// guesser falls back to when it recognises nothing, so treating it as a
   /// decision would let one bad guess block the pairing forever.
   static bool _saysNothing(String? category) =>
-      category == null || category == Categories.other;
+      category == null || Categories.same(category, Categories.other);
 
   /// Categories a self transfer is commonly filed under by mistake. A
   /// credit is guessed as a Refund when nothing else matches, and a
   /// transfer between accounts is naturally typed as Transfer.
   static bool _plausiblyATransfer(String? category) =>
       _saysNothing(category) ||
-      category == Categories.transfer ||
-      category == Categories.refund ||
-      category == Categories.selfTransfer;
+      Categories.same(category, Categories.transfer) ||
+      Categories.same(category, Categories.refund) ||
+      Categories.isInternal(category);
 
   /// Which account a transaction belongs to, or null when there is not
   /// enough detail to tell one account from another. Without this, two
