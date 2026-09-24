@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/db.dart';
 import '../data/providers.dart';
+import '../parsing/message_links.dart';
 import '../services/sms_service.dart';
+import 'compose_page.dart';
+import 'message_body.dart';
 
 final _timeFmt = DateFormat('d MMM, h:mm a');
 
@@ -58,6 +64,127 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// What to do with a number found inside a message. Calling is the
+  /// obvious one, but a number in a bank SMS is as often something to text
+  /// or to save.
+  Future<void> _phoneActions(BuildContext context, String shown) async {
+    final digits = shown.replaceAll(RegExp(r'[\s-]'), '');
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(shown,
+                  style: Theme.of(sheetContext).textTheme.titleMedium),
+            ),
+            ListTile(
+              leading: const Icon(Icons.call_outlined),
+              title: const Text('Call'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                launchUrl(Uri.parse('tel:$digits'));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sms_outlined),
+              title: const Text('Send a message'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ComposePage(to: digits)),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Copy number'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Clipboard.setData(ClipboardData(text: digits));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied $digits')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Long-press menu on a message: forward it, copy it, share it out, grab
+  /// the code in it, or delete it.
+  Future<void> _messageActions(BuildContext context, SmsMessage m) async {
+    final code = MessageLinks.code(m.body);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (code != null)
+              ListTile(
+                leading: const Icon(Icons.pin_outlined),
+                title: Text('Copy code $code'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Clipboard.setData(ClipboardData(text: code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Copied $code')),
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.forward_outlined),
+              title: const Text('Forward'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ComposePage(body: m.body),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Copy text'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Clipboard.setData(ClipboardData(text: m.body));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Copied')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share outside the app'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                SharePlus.instance.share(ShareParams(text: m.body));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete message'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await ref.read(dbProvider).deleteMessage(m.id);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -119,7 +246,11 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
                 itemCount: list.length,
                 itemBuilder: (context, i) {
                   final m = list[list.length - 1 - i];
-                  return _Bubble(message: m);
+                  return _Bubble(
+                    message: m,
+                    onPhone: (number) => _phoneActions(context, number),
+                    onLongPress: () => _messageActions(context, m),
+                  );
                 },
               ),
             ),
@@ -166,7 +297,14 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
 
 class _Bubble extends StatelessWidget {
   final SmsMessage message;
-  const _Bubble({required this.message});
+  final void Function(String number) onPhone;
+  final VoidCallback onLongPress;
+
+  const _Bubble({
+    required this.message,
+    required this.onPhone,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +312,9 @@ class _Bubble extends StatelessWidget {
     final mine = message.outgoing;
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        child: Container(
         margin: const EdgeInsets.symmetric(vertical: 3),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
@@ -191,7 +331,7 @@ class _Bubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(message.body),
+            MessageBody(body: message.body, onPhone: onPhone),
             const SizedBox(height: 2),
             Text(
               _timeFmt.format(message.receivedAt),
@@ -201,6 +341,7 @@ class _Bubble extends StatelessWidget {
                   ?.copyWith(color: scheme.outline),
             ),
           ],
+        ),
         ),
       ),
     );

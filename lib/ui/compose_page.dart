@@ -6,16 +6,25 @@ import 'thread_page.dart';
 
 /// Starts a new conversation with any number.
 class ComposePage extends ConsumerStatefulWidget {
-  const ComposePage({super.key});
+  /// Prefilled recipient, when the number is already known.
+  final String? to;
+
+  /// Prefilled text, which is how forwarding a message works: the body
+  /// travels, the recipient is chosen here.
+  final String? body;
+
+  const ComposePage({super.key, this.to, this.body});
 
   @override
   ConsumerState<ComposePage> createState() => _ComposePageState();
 }
 
 class _ComposePageState extends ConsumerState<ComposePage> {
-  final _to = TextEditingController();
-  final _body = TextEditingController();
+  late final _to = TextEditingController(text: widget.to ?? '');
+  late final _body = TextEditingController(text: widget.body ?? '');
   bool _sending = false;
+
+  bool get _isForward => widget.body != null;
 
   @override
   void dispose() {
@@ -46,14 +55,17 @@ class _ComposePageState extends ConsumerState<ComposePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New message')),
+      appBar: AppBar(
+          title: Text(_isForward ? 'Forward message' : 'New message')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             TextField(
               controller: _to,
-              autofocus: true,
+              // Forwarding already has the text; the recipient is what is
+              // missing.
+              autofocus: widget.to == null,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'To',
@@ -64,6 +76,7 @@ class _ComposePageState extends ConsumerState<ComposePage> {
             const SizedBox(height: 16),
             TextField(
               controller: _body,
+              autofocus: widget.to != null && widget.body == null,
               minLines: 3,
               maxLines: 8,
               textCapitalization: TextCapitalization.sentences,
