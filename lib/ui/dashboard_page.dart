@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../services/insights.dart';
 import 'budgets_page.dart';
 import 'self_transfers_page.dart';
+import 'transaction_list_page.dart';
 
 final _rupee = NumberFormat.currency(
     locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -25,6 +26,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   /// null selection means every transaction ever recorded.
   DateTime? _month = DateTime(DateTime.now().year, DateTime.now().month);
   bool _allTime = false;
+
+  /// Opens the transactions behind a figure on this page.
+  void _open(BuildContext context, String title, TxnFilter filter) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TransactionListPage(title: title, filter: filter),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +68,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     t.occurredAt.year == selected!.year &&
                     t.occurredAt.month == selected.month)
                 .toList();
+
+        // Null means all time, which is what the drill-down filter expects.
+        final month = _allTime ? null : selected;
 
         double spent = 0, received = 0, ccSpent = 0, internal = 0;
         final byCategory = <String, double>{};
@@ -124,14 +138,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             Row(
               children: [
                 _StatCard(
-                    label: 'Spent',
-                    value: _rupee.format(spent),
-                    color: Colors.red.shade700),
+                  label: 'Spent',
+                  value: _rupee.format(spent),
+                  color: Colors.red.shade700,
+                  onTap: () => _open(context, 'Spent',
+                      TxnFilter(month: month, type: TxnType.debit)),
+                ),
                 const SizedBox(width: 12),
                 _StatCard(
-                    label: 'Received',
-                    value: _rupee.format(received),
-                    color: Colors.green.shade700),
+                  label: 'Received',
+                  value: _rupee.format(received),
+                  color: Colors.green.shade700,
+                  onTap: () => _open(context, 'Received',
+                      TxnFilter(month: month, type: TxnType.credit)),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -141,24 +161,43 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               color: Colors.deepPurple,
               icon: Icons.credit_card,
               expand: false,
+              onTap: () => _open(
+                context,
+                'Credit card spends',
+                TxnFilter(
+                  month: month,
+                  type: TxnType.debit,
+                  creditCardOnly: true,
+                ),
+              ),
             ),
             if (internal > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Row(
-                  children: [
-                    Icon(Icons.swap_horiz,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.outline),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${_rupee.format(internal)} moved between your own '
-                        'accounts. Not counted as spent or received.',
-                        style: Theme.of(context).textTheme.bodySmall,
+              InkWell(
+                onTap: () => _open(
+                  context,
+                  'Moved between your accounts',
+                  TxnFilter(month: month, onlyInternal: true),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_horiz,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${_rupee.format(internal)} moved between your own '
+                          'accounts. Not counted as spent or received.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
-                    ),
-                  ],
+                      Icon(Icons.chevron_right,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.outline),
+                    ],
+                  ),
                 ),
               ),
             const SizedBox(height: 20),
@@ -178,7 +217,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               const SizedBox(height: 12),
               _CategoryPie(byCategory: byCategory),
               const SizedBox(height: 12),
-              _CategoryLegend(byCategory: byCategory, total: spent),
+              _CategoryLegend(
+                byCategory: byCategory,
+                total: spent,
+                onTap: (category) => _open(
+                  context,
+                  category,
+                  TxnFilter(
+                    month: month,
+                    type: TxnType.debit,
+                    // The pie groups anything uncategorized together, so
+                    // that slice opens as the uncategorized ones.
+                    category:
+                        category == 'Uncategorized' ? null : category,
+                    uncategorizedOnly: category == 'Uncategorized',
+                  ),
+                ),
+              ),
             ] else
               Padding(
                 padding: const EdgeInsets.only(top: 32),
@@ -557,7 +612,15 @@ class _CategoryPie extends StatelessWidget {
 class _CategoryLegend extends StatelessWidget {
   final Map<String, double> byCategory;
   final double total;
-  const _CategoryLegend({required this.byCategory, required this.total});
+
+  /// Opens the spends inside one category.
+  final void Function(String category) onTap;
+
+  const _CategoryLegend({
+    required this.byCategory,
+    required this.total,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -565,8 +628,10 @@ class _CategoryLegend extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < entries.length; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+          InkWell(
+            onTap: () => onTap(entries[i].key),
+            child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 Container(
@@ -592,8 +657,12 @@ class _CategoryLegend extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
+                Icon(Icons.chevron_right,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.outline),
               ],
             ),
+          ),
           ),
       ],
     );
@@ -606,18 +675,26 @@ class _StatCard extends StatelessWidget {
   final Color color;
   final IconData? icon;
   final bool expand;
+
+  /// Opens the transactions this figure was added up from.
+  final VoidCallback? onTap;
+
   const _StatCard({
     required this.label,
     required this.value,
     required this.color,
     this.icon,
     this.expand = true,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final card = Card(
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,12 +709,24 @@ class _StatCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Text(value,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: color, fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                Text(value,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(
+                            color: color, fontWeight: FontWeight.w700)),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.outline),
+                ],
+              ],
+            ),
           ],
+        ),
         ),
       ),
     );

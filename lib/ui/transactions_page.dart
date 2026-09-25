@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
+import 'delete_transaction.dart';
 import 'transaction_edit_page.dart';
 
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
@@ -178,17 +179,12 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                               child:
                                   const Icon(Icons.delete, color: Colors.white),
                             ),
-                            onDismissed: (_) async {
-                              await ref
-                                  .read(dbProvider)
-                                  .deleteTransaction(txn.id);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('Transaction deleted')),
-                                );
-                              }
-                            },
+                            // A swipe is easy to do by accident, so the
+                            // row only leaves once the question is answered.
+                            confirmDismiss: (_) =>
+                                confirmDeleteTransaction(context, txn),
+                            onDismissed: (_) => deleteTransactionWithUndo(
+                                ScaffoldMessenger.of(context), ref, txn),
                             child: TransactionTile(txn: txn),
                           );
                         },
@@ -304,8 +300,13 @@ Future<void> showCategorySheet(
                   tooltip: 'Delete transaction',
                   icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
                   onPressed: () async {
-                    await ref.read(dbProvider).deleteTransaction(txn.id);
-                    if (context.mounted) Navigator.pop(context);
+                    // The sheet sits above the messenger it would use, so
+                    // it is closed first and the undo shown behind it.
+                    if (!await confirmDeleteTransaction(context, txn)) return;
+                    if (!context.mounted) return;
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(context);
+                    await deleteTransactionWithUndo(messenger, ref, txn);
                   },
                 ),
               ],

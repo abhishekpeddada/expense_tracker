@@ -205,6 +205,21 @@ class AppDb extends _$AppDb {
   Future<void> deleteTransaction(int id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
 
+  /// Deletes a transaction and hands back the row that was removed, so an
+  /// undo has something to put back. Null when it was already gone.
+  Future<Transaction?> deleteTransactionReturning(int id) async {
+    final row = await (select(transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    await (delete(transactions)..where((t) => t.id.equals(id))).go();
+    return row;
+  }
+
+  /// Puts a deleted transaction back, keeping its original id so the SMS
+  /// entry it was parsed from still points at the same record.
+  Future<void> restoreTransaction(Transaction txn) =>
+      into(transactions).insert(txn, mode: InsertMode.insertOrReplace);
+
   /// Duplicate check used by statement import: same day, amount, type, and
   /// description means the row was already imported (or came in via SMS).
   Future<bool> hasSimilarTransaction(
