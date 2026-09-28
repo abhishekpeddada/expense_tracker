@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_service.dart';
+
 /// How a call ended up in the log.
 enum CallKind { incoming, outgoing, missed, rejected, blocked, voicemail, other }
 
@@ -68,7 +70,10 @@ class Voicemail {
   /// The carrier's own name for it, when it supplies one.
   final String? label;
 
-  const Voicemail({this.number, this.label});
+  /// True when the number came from Settings rather than the SIM.
+  final bool isOverride;
+
+  const Voicemail({this.number, this.label, this.isOverride = false});
 
   bool get isAvailable => number != null && number!.isNotEmpty;
 }
@@ -152,9 +157,21 @@ final recentCallsProvider = FutureProvider<List<CallEntry>>(
   (ref) => ref.watch(phoneServiceProvider).recentCalls(),
 );
 
-final voicemailProvider = FutureProvider<Voicemail>(
-  (ref) => ref.watch(phoneServiceProvider).voicemail(),
-);
+/// The voicemail number to actually dial.
+///
+/// Some SIMs carry the subscriber's own number in the voicemail field, or
+/// nothing at all, so a number set in Settings wins over whatever the SIM
+/// reports.
+final voicemailProvider = FutureProvider<Voicemail>((ref) async {
+  final sim = await ref.watch(phoneServiceProvider).voicemail();
+  final override = ref.watch(settingsProvider).voicemailNumber;
+  if (override.isEmpty) return sim;
+  return Voicemail(
+    number: override,
+    label: sim.label,
+    isOverride: true,
+  );
+});
 
 /// Whether this app currently holds the dialer role. Polled for the same
 /// reason the SMS role is: the system dialog and Settings both change it

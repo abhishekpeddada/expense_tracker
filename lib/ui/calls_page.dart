@@ -98,10 +98,14 @@ class _VoicemailTile extends ConsumerWidget {
     final vm = ref.watch(voicemailProvider).valueOrNull;
     if (vm == null || !vm.isAvailable) return const SizedBox.shrink();
 
+    // The number is spelled out rather than hidden behind "Voicemail":
+    // some SIMs carry the subscriber's own number in that field, and
+    // dialling yourself without warning is alarming.
     return ListTile(
       leading: const Icon(Icons.voicemail),
       title: Text(vm.label ?? 'Voicemail'),
-      subtitle: const Text('Tap to call and listen'),
+      subtitle: Text('Tap to call ${vm.number}'
+          '${vm.isOverride ? ' (set in Settings)' : ''}'),
       trailing: const Icon(Icons.call),
       onTap: () => ref.read(phoneServiceProvider).call(vm.number!),
     );

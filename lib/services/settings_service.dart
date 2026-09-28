@@ -22,6 +22,10 @@ class AppSettings {
   /// "try it and report what happens".
   final bool? modelAcceptsImages;
 
+  /// Number to dial for voicemail, when the SIM's own value is wrong or
+  /// missing. Empty means use whatever the SIM reports.
+  final String voicemailNumber;
+
   /// Force the pitch-black (AMOLED) dark theme instead of following system.
   final bool pitchBlack;
 
@@ -30,6 +34,7 @@ class AppSettings {
     this.openRouterModel = OpenRouterClient.defaultModel,
     this.autoEstimate = true,
     this.modelAcceptsImages,
+    this.voicemailNumber = '',
     this.pitchBlack = false,
   });
 
@@ -41,6 +46,7 @@ class AppSettings {
     bool? autoEstimate,
     bool? modelAcceptsImages,
     bool clearModelAcceptsImages = false,
+    String? voicemailNumber,
     bool? pitchBlack,
   }) =>
       AppSettings(
@@ -50,6 +56,7 @@ class AppSettings {
         modelAcceptsImages: clearModelAcceptsImages
             ? null
             : (modelAcceptsImages ?? this.modelAcceptsImages),
+        voicemailNumber: voicemailNumber ?? this.voicemailNumber,
         pitchBlack: pitchBlack ?? this.pitchBlack,
       );
 }
@@ -60,6 +67,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
   static const _keyAuto = 'openrouter.autoEstimate';
 
   static const _keyVision = 'openrouter.modelAcceptsImages';
+  static const _keyVoicemail = 'phone.voicemailNumber';
 
   /// Kept under its original name so the existing preference carries over.
   static const _keyPitchBlack = 'pitchBlack';
@@ -79,6 +87,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
             _prefs?.getString(_keyModel) ?? OpenRouterClient.defaultModel,
         autoEstimate: _prefs?.getBool(_keyAuto) ?? true,
         modelAcceptsImages: _prefs?.getBool(_keyVision),
+        voicemailNumber: _prefs?.getString(_keyVoicemail) ?? '',
         pitchBlack: _prefs?.getBool(_keyPitchBlack) ?? false,
       );
 
@@ -107,6 +116,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setAutoEstimate(bool value) {
     state = state.copyWith(autoEstimate: value);
     _prefs?.setBool(_keyAuto, value);
+  }
+
+  void setVoicemailNumber(String value) {
+    final number = value.trim();
+    state = state.copyWith(voicemailNumber: number);
+    _prefs?.setString(_keyVoicemail, number);
   }
 
   void togglePitchBlack() {

@@ -244,6 +244,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const Divider(height: 32),
           const _SectionHeader('Phone'),
           const _DialerRole(),
+          const _VoicemailNumber(),
           const Divider(height: 32),
           const _SectionHeader('Appearance'),
           SwitchListTile(
@@ -275,6 +276,78 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const DiagnosticsPage()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Override for the voicemail number.
+///
+/// Worth having because the SIM field is not reliable: some Indian
+/// carriers leave it empty, and some store the subscriber's own number in
+/// it, which makes "call voicemail" dial you.
+class _VoicemailNumber extends ConsumerStatefulWidget {
+  const _VoicemailNumber();
+
+  @override
+  ConsumerState<_VoicemailNumber> createState() => _VoicemailNumberState();
+}
+
+class _VoicemailNumberState extends ConsumerState<_VoicemailNumber> {
+  late final TextEditingController _controller =
+      TextEditingController(text: ref.read(settingsProvider).voicemailNumber);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    ref.read(settingsProvider.notifier).setVoicemailNumber(_controller.text);
+    ref.invalidate(voicemailProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sim = ref.watch(voicemailProvider).valueOrNull;
+    final fromSim = sim != null && !sim.isOverride ? sim.number : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: 'Voicemail number',
+              hintText: fromSim ?? 'Leave empty to use the SIM',
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: IconButton(
+                tooltip: 'Save',
+                icon: const Icon(Icons.check),
+                onPressed: _save,
+              ),
+            ),
+            onEditingComplete: _save,
+            onSubmitted: (_) => _save(),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 8),
+            child: Text(
+              fromSim == null
+                  ? 'Your SIM reports no voicemail number. Enter your '
+                      'carrier\'s one here.'
+                  : 'Your SIM reports $fromSim. If that is your own number '
+                      'rather than the voicemail service, enter the right '
+                      'one here.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
         ],
