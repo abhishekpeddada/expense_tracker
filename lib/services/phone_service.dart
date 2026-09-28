@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// How a call ended up in the log.
-enum CallKind { incoming, outgoing, missed, rejected, blocked, other }
+enum CallKind { incoming, outgoing, missed, rejected, blocked, voicemail, other }
 
 /// One entry from the system call log.
 class CallEntry {
@@ -31,6 +31,7 @@ class CallEntry {
         1 => CallKind.incoming,
         2 => CallKind.outgoing,
         3 => CallKind.missed,
+        4 => CallKind.voicemail,
         5 => CallKind.rejected,
         6 => CallKind.blocked,
         _ => CallKind.other,
@@ -54,6 +55,29 @@ class CallEntry {
 /// Placing a call works whether or not this app is the default dialer: with
 /// the role it goes through Telecom and our own call screen, without it the
 /// system dialer is handed the number.
+/// What the carrier's voicemail service reports.
+///
+/// The recording happens on the operator's side - an unanswered call is
+/// diverted there, the caller hears the greeting and the beep, and the
+/// network raises a waiting flag on the SIM. None of that is the phone's
+/// doing, and a dialer can only report it and dial in.
+class Voicemail {
+  /// The number to dial to listen. Null when the SIM does not carry one.
+  final String? number;
+
+  /// The carrier's own name for it, when it supplies one.
+  final String? label;
+
+  /// Messages waiting. Some networks say only that there are some, which
+  /// arrives as a count of one rather than a real total.
+  final int count;
+
+  const Voicemail({this.number, this.label, this.count = 0});
+
+  bool get isAvailable => number != null && number!.isNotEmpty;
+  bool get hasMessages => count > 0;
+}
+
 class PhoneService {
   static const _channel = MethodChannel('expense_tracker/sms');
 
@@ -92,6 +116,26 @@ class PhoneService {
     }
   }
 
+  Future<Voicemail> voicemail() async {
+    try {
+      final m = await _channel
+          .invokeMethod<Map<Object?, Object?>>('getVoicemail');
+      if (m == null) return const Voicemail();
+      final map = m.cast<String, Object?>();
+      return Voicemail(
+        number: (map['number'] as String?)?.trim().isEmpty == true
+            ? null
+            : map['number'] as String?,
+        label: (map['label'] as String?)?.trim().isEmpty == true
+            ? null
+            : map['label'] as String?,
+        count: (map['count'] as num?)?.toInt() ?? 0,
+      );
+    } on MissingPluginException {
+      return const Voicemail();
+    }
+  }
+
   Future<List<CallEntry>> recentCalls({int limit = 200}) async {
     try {
       final list = await _channel
@@ -112,6 +156,10 @@ final phoneServiceProvider = Provider<PhoneService>((ref) => PhoneService());
 /// Recent calls, refreshed when something asks for them again.
 final recentCallsProvider = FutureProvider<List<CallEntry>>(
   (ref) => ref.watch(phoneServiceProvider).recentCalls(),
+);
+
+final voicemailProvider = FutureProvider<Voicemail>(
+  (ref) => ref.watch(phoneServiceProvider).voicemail(),
 );
 
 /// Whether this app currently holds the dialer role. Polled for the same

@@ -12,6 +12,7 @@ import android.provider.CallLog
 import android.provider.Settings
 import android.provider.Telephony
 import android.telecom.TelecomManager
+import android.telephony.TelephonyManager
 import android.telephony.SmsManager
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -135,6 +136,7 @@ class MainActivity : FlutterActivity() {
                         result.success(placeCall(number))
                     }
                 }
+                "getVoicemail" -> result.success(voicemailInfo())
                 "getCallLog" -> {
                     val limit = call.argument<Int>("limit") ?: 200
                     result.success(readCallLog(limit))
@@ -284,6 +286,31 @@ class MainActivity : FlutterActivity() {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }.isSuccess
+    }
+
+    /**
+     * The carrier's voicemail number and how many messages are waiting.
+     *
+     * Both come from the network, not from this app: the operator records
+     * the message and sets a waiting flag on the SIM. All a dialer can do
+     * is report the flag and dial in to listen.
+     */
+    private fun voicemailInfo(): Map<String, Any?> {
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return mapOf("number" to null, "count" to 0)
+
+        val tm = getSystemService(TelephonyManager::class.java)
+        val number = runCatching { tm?.voiceMailNumber }.getOrNull()
+        val alphaTag = runCatching { tm?.voiceMailAlphaTag }.getOrNull()
+        // A negative count means the network reports messages waiting but
+        // not how many, which is common; treat it as "at least one".
+        val raw = runCatching { tm?.voiceMessageCount ?: 0 }.getOrDefault(0)
+        return mapOf(
+            "number" to number,
+            "label" to alphaTag,
+            "count" to if (raw < 0) 1 else raw,
+        )
     }
 
     /** Recent calls, newest first, for the Calls list. */

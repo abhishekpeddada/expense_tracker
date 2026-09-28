@@ -45,6 +45,7 @@ class CallsPage extends ConsumerWidget {
                 ),
               ],
             ),
+          const _VoicemailTile(),
           Expanded(
             child: calls.when(
               loading: () =>
@@ -60,7 +61,10 @@ class CallsPage extends ConsumerWidget {
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(recentCallsProvider),
+                  onRefresh: () async {
+                    ref.invalidate(recentCallsProvider);
+                    ref.invalidate(voicemailProvider);
+                  },
                   child: ListView.separated(
                     itemCount: list.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
@@ -83,6 +87,38 @@ class CallsPage extends ConsumerWidget {
         showDragHandle: true,
         builder: (_) => const _Keypad(),
       );
+}
+
+/// Dial in to the carrier's voicemail, and say when messages are waiting.
+class _VoicemailTile extends ConsumerWidget {
+  const _VoicemailTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vm = ref.watch(voicemailProvider).valueOrNull;
+    if (vm == null || !vm.isAvailable) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: vm.hasMessages ? scheme.primaryContainer : null,
+      child: ListTile(
+        leading: Badge(
+          isLabelVisible: vm.hasMessages,
+          label: Text('${vm.count}'),
+          child: const Icon(Icons.voicemail),
+        ),
+        title: Text(vm.label ?? 'Voicemail'),
+        subtitle: Text(
+          vm.hasMessages
+              ? '${vm.count} message${vm.count == 1 ? '' : 's'} waiting - '
+                  'tap to listen'
+              : 'Tap to call and listen',
+        ),
+        trailing: const Icon(Icons.call),
+        onTap: () => ref.read(phoneServiceProvider).call(vm.number!),
+      ),
+    );
+  }
 }
 
 class _Empty extends StatelessWidget {
@@ -135,6 +171,7 @@ class _CallTile extends ConsumerWidget {
       CallKind.missed => (Icons.call_missed, scheme.error),
       CallKind.rejected => (Icons.call_end, scheme.error),
       CallKind.blocked => (Icons.block, scheme.error),
+      CallKind.voicemail => (Icons.voicemail, scheme.primary),
       CallKind.other => (Icons.call, scheme.outline),
     };
 
@@ -217,6 +254,21 @@ class _KeypadState extends ConsumerState<_Keypad> {
     ['#', ''],
   ];
 
+  Future<void> _callVoicemail() async {
+    final vm = await ref.read(phoneServiceProvider).voicemail();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!vm.isAvailable) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No voicemail number on this SIM'),
+      ));
+      return;
+    }
+    await ref.read(phoneServiceProvider).call(vm.number!);
+    navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = _number.length >= 3
@@ -255,10 +307,14 @@ class _KeypadState extends ConsumerState<_Keypad> {
                         letters: _keys[row * 3 + col][1],
                         onTap: () => setState(
                             () => _number += _keys[row * 3 + col][0]),
-                        // Long-pressing zero is how a + is typed.
-                        onLongPress: _keys[row * 3 + col][0] == '0'
-                            ? () => setState(() => _number += '+')
-                            : null,
+                        // Long-pressing zero types a +, and long-pressing
+                        // one dials voicemail. Both are what every dialer
+                        // does, so both are what fingers expect.
+                        onLongPress: switch (_keys[row * 3 + col][0]) {
+                          '0' => () => setState(() => _number += '+'),
+                          '1' => () => _callVoicemail(),
+                          _ => null,
+                        },
                       ),
                     ),
                 ],
