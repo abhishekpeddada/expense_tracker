@@ -289,27 +289,26 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * The carrier's voicemail number and how many messages are waiting.
+     * The carrier's voicemail number, and its own name for the service.
      *
-     * Both come from the network, not from this app: the operator records
-     * the message and sets a waiting flag on the SIM. All a dialer can do
-     * is report the flag and dial in to listen.
+     * Both come from the SIM, not from this app: the operator records the
+     * message and this only says where to ring to hear it.
+     *
+     * There is deliberately no unread count here. getVoiceMessageCount is
+     * marked @hide in the platform, so it is not ours to call; the public
+     * alternative delivers a waiting flag asynchronously through a
+     * listener, which is a lot of moving parts for a badge. The system
+     * already shows the waiting icon in the status bar.
      */
     private fun voicemailInfo(): Map<String, Any?> {
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) !=
             PackageManager.PERMISSION_GRANTED
-        ) return mapOf("number" to null, "count" to 0)
+        ) return mapOf("number" to null, "label" to null)
 
         val tm = getSystemService(TelephonyManager::class.java)
-        val number = runCatching { tm?.voiceMailNumber }.getOrNull()
-        val alphaTag = runCatching { tm?.voiceMailAlphaTag }.getOrNull()
-        // A negative count means the network reports messages waiting but
-        // not how many, which is common; treat it as "at least one".
-        val raw = runCatching { tm?.voiceMessageCount ?: 0 }.getOrDefault(0)
         return mapOf(
-            "number" to number,
-            "label" to alphaTag,
-            "count" to if (raw < 0) 1 else raw,
+            "number" to runCatching { tm?.voiceMailNumber }.getOrNull(),
+            "label" to runCatching { tm?.voiceMailAlphaTag }.getOrNull(),
         )
     }
 

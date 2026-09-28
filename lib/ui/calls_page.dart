@@ -98,25 +98,12 @@ class _VoicemailTile extends ConsumerWidget {
     final vm = ref.watch(voicemailProvider).valueOrNull;
     if (vm == null || !vm.isAvailable) return const SizedBox.shrink();
 
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: vm.hasMessages ? scheme.primaryContainer : null,
-      child: ListTile(
-        leading: Badge(
-          isLabelVisible: vm.hasMessages,
-          label: Text('${vm.count}'),
-          child: const Icon(Icons.voicemail),
-        ),
-        title: Text(vm.label ?? 'Voicemail'),
-        subtitle: Text(
-          vm.hasMessages
-              ? '${vm.count} message${vm.count == 1 ? '' : 's'} waiting - '
-                  'tap to listen'
-              : 'Tap to call and listen',
-        ),
-        trailing: const Icon(Icons.call),
-        onTap: () => ref.read(phoneServiceProvider).call(vm.number!),
-      ),
+    return ListTile(
+      leading: const Icon(Icons.voicemail),
+      title: Text(vm.label ?? 'Voicemail'),
+      subtitle: const Text('Tap to call and listen'),
+      trailing: const Icon(Icons.call),
+      onTap: () => ref.read(phoneServiceProvider).call(vm.number!),
     );
   }
 }

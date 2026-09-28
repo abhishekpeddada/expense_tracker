@@ -68,14 +68,9 @@ class Voicemail {
   /// The carrier's own name for it, when it supplies one.
   final String? label;
 
-  /// Messages waiting. Some networks say only that there are some, which
-  /// arrives as a count of one rather than a real total.
-  final int count;
-
-  const Voicemail({this.number, this.label, this.count = 0});
+  const Voicemail({this.number, this.label});
 
   bool get isAvailable => number != null && number!.isNotEmpty;
-  bool get hasMessages => count > 0;
 }
 
 class PhoneService {
@@ -129,7 +124,6 @@ class PhoneService {
         label: (map['label'] as String?)?.trim().isEmpty == true
             ? null
             : map['label'] as String?,
-        count: (map['count'] as num?)?.toInt() ?? 0,
       );
     } on MissingPluginException {
       return const Voicemail();
