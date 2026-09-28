@@ -1,6 +1,7 @@
 package com.abhishek.expense_tracker
 
 import android.Manifest
+import android.app.NotificationManager
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -137,6 +138,20 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "getVoicemail" -> result.success(voicemailInfo())
+                "getContacts" -> result.success(readContacts())
+                "addContact" -> {
+                    val number = call.argument<String>("number")
+                    val name = call.argument<String>("name")
+                    result.success(addContact(number, name))
+                }
+                "openContact" -> {
+                    val id = call.argument<Int>("id")?.toLong()
+                    result.success(openContact(id))
+                }
+                "canUseFullScreenIntent" -> result.success(canFullScreen())
+                "openFullScreenIntentSettings" -> {
+                    result.success(openFullScreenSettings())
+                }
                 "getCallLog" -> {
                     val limit = call.argument<Int>("limit") ?: 200
                     result.success(readCallLog(limit))
@@ -176,6 +191,7 @@ class MainActivity : FlutterActivity() {
                         mapOf(
                             "isDefaultSmsApp" to isDefaultSmsApp(),
                             "isDefaultDialer" to isDefaultDialer(),
+                            "fullScreenCalls" to canFullScreen(),
                             "canPlaceCalls" to (checkSelfPermission(
                                 Manifest.permission.CALL_PHONE
                             ) == PackageManager.PERMISSION_GRANTED),
@@ -283,6 +299,118 @@ class MainActivity : FlutterActivity() {
         return runCatching {
             startActivity(
                 Intent(Intent.ACTION_DIAL, uri)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+    }
+
+    /**
+     * Whether the incoming call screen is allowed to take over the display.
+     *
+     * From Android 14 a full-screen intent needs its own permission. It is
+     * granted at install to calling apps, but it can be revoked, and when
+     * it is the call screen quietly degrades to a heads-up notification
+     * with no hint as to why.
+     */
+    private fun canFullScreen(): Boolean {
+        if (Build.VERSION.SDK_INT < 34) return true
+        val nm = getSystemService(NotificationManager::class.java)
+        return runCatching { nm.canUseFullScreenIntent() }.getOrDefault(true)
+    }
+
+    private fun openFullScreenSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < 34) return false
+        return runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }.isSuccess
+    }
+
+    /** Every phone number in the contact book, one row per number. */
+    private fun readContacts(): List<Map<String, Any?>> {
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return emptyList()
+
+        return runCatching {
+            val out = mutableListOf<Map<String, Any?>>()
+            val seen = mutableSetOf<String>()
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+                    ContactsContract.CommonDataKinds.Phone.TYPE,
+                    ContactsContract.CommonDataKinds.Phone.LABEL,
+                ),
+                null,
+                null,
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC",
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val number = c.getString(2) ?: continue
+                    val id = c.getLong(0)
+                    // The same number often appears twice, once per account
+                    // it syncs from; the list should not.
+                    val key = "$id|${number.filter { ch -> ch.isDigit() }}"
+                    if (!seen.add(key)) continue
+                    out.add(
+                        mapOf(
+                            "id" to id,
+                            "name" to c.getString(1),
+                            "number" to number,
+                            "photo" to c.getString(3),
+                            "label" to phoneLabel(c.getInt(4), c.getString(5)),
+                        )
+                    )
+                }
+            }
+            out
+        }.getOrDefault(emptyList())
+    }
+
+    private fun phoneLabel(type: Int, custom: String?): String =
+        ContactsContract.CommonDataKinds.Phone
+            .getTypeLabel(resources, type, custom)
+            .toString()
+
+    /**
+     * Hands the number to the system contact editor rather than writing
+     * the contact here. It already knows about accounts, duplicates and
+     * every field a contact can have, and it needs no write permission
+     * from us.
+     */
+    private fun addContact(number: String?, name: String?): Boolean =
+        runCatching {
+            val intent = Intent(Intent.ACTION_INSERT_OR_EDIT)
+                .setType(ContactsContract.Contacts.CONTENT_ITEM_TYPE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!number.isNullOrBlank()) {
+                intent.putExtra(ContactsContract.Intents.Insert.PHONE, number)
+            }
+            if (!name.isNullOrBlank()) {
+                intent.putExtra(ContactsContract.Intents.Insert.NAME, name)
+            }
+            startActivity(intent)
+        }.isSuccess
+
+    private fun openContact(id: Long?): Boolean {
+        if (id == null) return false
+        return runCatching {
+            startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setData(
+                        Uri.withAppendedPath(
+                            ContactsContract.Contacts.CONTENT_URI,
+                            id.toString()
+                        )
+                    )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }.isSuccess

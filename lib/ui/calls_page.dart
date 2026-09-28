@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -208,6 +209,57 @@ class _CallTile extends ConsumerWidget {
           ),
         ],
       ),
+      onLongPress: entry.number.isEmpty
+          ? null
+          : () => _entryActions(context, ref, entry, name),
+    );
+  }
+
+  /// Long-press a call: save the number, copy it, or block out the noise
+  /// of retyping it somewhere else.
+  Future<void> _entryActions(
+    BuildContext context,
+    WidgetRef ref,
+    CallEntry entry,
+    String? name,
+  ) {
+    final phone = ref.read(phoneServiceProvider);
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(name ?? entry.number,
+                  style: Theme.of(sheetContext).textTheme.titleMedium),
+              subtitle: name == null ? null : Text(entry.number),
+            ),
+            if (name == null)
+              ListTile(
+                leading: const Icon(Icons.person_add_alt),
+                title: const Text('Save to contacts'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await phone.addContact(number: entry.number);
+                  ref.invalidate(contactsProvider);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Copy number'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Clipboard.setData(ClipboardData(text: entry.number));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied ${entry.number}')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -341,6 +393,17 @@ class _KeypadState extends ConsumerState<_Keypad> {
                 ),
               ],
             ),
+            if (_number.isNotEmpty && name == null)
+              TextButton.icon(
+                onPressed: () async {
+                  await ref
+                      .read(phoneServiceProvider)
+                      .addContact(number: _number);
+                  ref.invalidate(contactsProvider);
+                },
+                icon: const Icon(Icons.person_add_alt),
+                label: const Text('Save to contacts'),
+              ),
           ],
         ),
       ),

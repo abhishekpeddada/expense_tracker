@@ -244,6 +244,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const Divider(height: 32),
           const _SectionHeader('Phone'),
           const _DialerRole(),
+          const _FullScreenCalls(),
           const _VoicemailNumber(),
           const Divider(height: 32),
           const _SectionHeader('Appearance'),
@@ -279,6 +280,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Whether the incoming call screen may take over the display.
+///
+/// Android 14 put full-screen intents behind their own permission. Calling
+/// apps get it at install, but it can be revoked, and when it is the
+/// incoming call screen silently becomes a heads-up notification with
+/// nothing to say why. Worth stating plainly rather than leaving the user
+/// to guess at a phone that no longer rings properly.
+class _FullScreenCalls extends ConsumerWidget {
+  const _FullScreenCalls();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allowed =
+        ref.watch(canUseFullScreenIntentProvider).valueOrNull ?? true;
+    if (allowed) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      color: scheme.errorContainer,
+      child: ListTile(
+        leading: Icon(Icons.fullscreen_exit, color: scheme.onErrorContainer),
+        title: const Text('Incoming calls cannot take over the screen'),
+        subtitle: const Text(
+            'Android is holding back the full-screen permission, so calls '
+            'arrive as a notification instead of the call screen. Tap to '
+            'allow it.'),
+        onTap: () async {
+          await ref.read(phoneServiceProvider).openFullScreenIntentSettings();
+          ref.invalidate(canUseFullScreenIntentProvider);
+        },
       ),
     );
   }

@@ -78,6 +78,53 @@ class Voicemail {
   bool get isAvailable => number != null && number!.isNotEmpty;
 }
 
+/// One phone number from the contact book.
+class Contact {
+  final int id;
+  final String name;
+  final String number;
+
+  /// Content URI of the contact photo, when they have one.
+  final String? photo;
+
+  /// "Mobile", "Work", and so on, as the system labels it.
+  final String? label;
+
+  const Contact({
+    required this.id,
+    required this.name,
+    required this.number,
+    this.photo,
+    this.label,
+  });
+
+  String get initial =>
+      name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+
+  /// Matches a search against the name and the digits alike, so a contact
+  /// can be found by either.
+  bool matches(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    if (name.toLowerCase().contains(q)) return true;
+    final digits = RegExp(r'\D').allMatches(q).isEmpty ? q : null;
+    if (digits == null) return false;
+    return number.replaceAll(RegExp(r'\D'), '').contains(digits);
+  }
+
+  static Contact fromMap(Map<String, Object?> m) => Contact(
+        id: (m['id'] as num?)?.toInt() ?? 0,
+        name: (m['name'] as String?) ?? '',
+        number: (m['number'] as String?) ?? '',
+        photo: (m['photo'] as String?)?.trim().isEmpty == true
+            ? null
+            : m['photo'] as String?,
+        label: (m['label'] as String?)?.trim().isEmpty == true
+            ? null
+            : m['label'] as String?,
+      );
+}
+
 class PhoneService {
   static const _channel = MethodChannel('expense_tracker/sms');
 
@@ -135,6 +182,57 @@ class PhoneService {
     }
   }
 
+  Future<List<Contact>> contacts() async {
+    try {
+      final list =
+          await _channel.invokeMethod<List<Object?>>('getContacts') ?? [];
+      return [
+        for (final e in list)
+          Contact.fromMap((e as Map).cast<String, Object?>()),
+      ];
+    } on MissingPluginException {
+      return [];
+    }
+  }
+
+  /// Opens the system contact editor, prefilled. Saving happens there, so
+  /// this app never needs permission to write contacts.
+  Future<void> addContact({String? number, String? name}) async {
+    try {
+      await _channel
+          .invokeMethod('addContact', {'number': number, 'name': name});
+    } on MissingPluginException {
+      // ignore off-Android
+    }
+  }
+
+  Future<void> openContact(int id) async {
+    try {
+      await _channel.invokeMethod('openContact', {'id': id});
+    } on MissingPluginException {
+      // ignore off-Android
+    }
+  }
+
+  /// False when Android 14+ has revoked the full-screen intent permission,
+  /// which silently turns the incoming call screen into a heads-up.
+  Future<bool> canUseFullScreenIntent() async {
+    try {
+      return await _channel.invokeMethod<bool>('canUseFullScreenIntent') ??
+          true;
+    } on MissingPluginException {
+      return true;
+    }
+  }
+
+  Future<void> openFullScreenIntentSettings() async {
+    try {
+      await _channel.invokeMethod('openFullScreenIntentSettings');
+    } on MissingPluginException {
+      // ignore off-Android
+    }
+  }
+
   Future<List<CallEntry>> recentCalls({int limit = 200}) async {
     try {
       final list = await _channel
@@ -162,6 +260,14 @@ final recentCallsProvider = FutureProvider<List<CallEntry>>(
 /// Some SIMs carry the subscriber's own number in the voicemail field, or
 /// nothing at all, so a number set in Settings wins over whatever the SIM
 /// reports.
+final contactsProvider = FutureProvider<List<Contact>>(
+  (ref) => ref.watch(phoneServiceProvider).contacts(),
+);
+
+final canUseFullScreenIntentProvider = FutureProvider<bool>(
+  (ref) => ref.watch(phoneServiceProvider).canUseFullScreenIntent(),
+);
+
 final voicemailProvider = FutureProvider<Voicemail>((ref) async {
   final sim = await ref.watch(phoneServiceProvider).voicemail();
   final override = ref.watch(settingsProvider).voicemailNumber;

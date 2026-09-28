@@ -83,6 +83,9 @@ class InCallActivity : Activity() {
     /** Tones typed so far this call, shown above the pad. */
     private val dtmfTyped = StringBuilder()
 
+    /** Whether the answer button is currently breathing. */
+    private var pulsing = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockScreen()
@@ -110,8 +113,12 @@ class InCallActivity : Activity() {
         dtmfView = findViewById(R.id.call_dtmf)
         wireKeypad()
 
-        answerButton.setOnClickListener { CallStore.answer() }
-        hangUpButton.setOnClickListener { CallStore.hangUp() }
+        answerButton.setOnClickListener {
+            tap(it) { CallStore.answer() }
+        }
+        hangUpButton.setOnClickListener {
+            tap(it) { CallStore.hangUp() }
+        }
         muteButton.setOnClickListener {
             CallStore.setMuted(!CallStore.isMuted())
             render()
@@ -154,7 +161,50 @@ class InCallActivity : Activity() {
 
     override fun onDestroy() {
         CallStore.removeListener(onCallsChanged)
+        stopPulse()
         super.onDestroy()
+    }
+
+    // ---- Movement ----
+
+    /**
+     * A press that answers or ends a call should feel like it landed. The
+     * action runs on the way back up rather than after the animation, so
+     * nothing is delayed for the sake of looking nice.
+     */
+    private fun tap(view: View, action: () -> Unit) {
+        view.animate()
+            .scaleX(0.88f).scaleY(0.88f)
+            .setDuration(70)
+            .withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+            }
+            .start()
+        action()
+    }
+
+    /** The answer button breathes while the phone rings. */
+    private fun startPulse() {
+        if (pulsing) return
+        pulsing = true
+        pulseStep(out = true)
+    }
+
+    private fun pulseStep(out: Boolean) {
+        if (!pulsing) return
+        val scale = if (out) 1.12f else 1f
+        answerButton.animate()
+            .scaleX(scale).scaleY(scale)
+            .setDuration(620)
+            .withEndAction { pulseStep(!out) }
+            .start()
+    }
+
+    private fun stopPulse() {
+        pulsing = false
+        answerButton.animate().cancel()
+        answerButton.scaleX = 1f
+        answerButton.scaleY = 1f
     }
 
     /** Back must not hang up, and must not hide a ringing call either. */
@@ -197,6 +247,7 @@ class InCallActivity : Activity() {
         if (ringing && keypadShowing()) setKeypadVisible(false)
 
         answerColumn.visibility = if (ringing) View.VISIBLE else View.GONE
+        if (ringing) startPulse() else stopPulse()
         replyRow.visibility =
             if (ringing && QuickReply.canSend(this) && number != null)
                 View.VISIBLE else View.GONE
@@ -227,6 +278,14 @@ class InCallActivity : Activity() {
         renderTimer(call)
 
         if (CallStore.stateOf(call) == Call.STATE_DISCONNECTED) {
+            stopPulse()
+            // "Call ended" is worth reading before the screen goes, and
+            // fading is gentler than a window vanishing mid-sentence.
+            window.decorView.animate()
+                .alpha(0f)
+                .setStartDelay(700)
+                .setDuration(400)
+                .start()
             main.postDelayed({ if (!isFinishing) finishAndRemoveTask() }, 1200)
         }
     }
