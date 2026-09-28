@@ -46,6 +46,9 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
 
   static const _labels = {
     'isDefaultSmsApp': 'Default SMS app',
+    'isDefaultDialer': 'Default phone app',
+    'canPlaceCalls': 'Call permission',
+    'canReadCallLog': 'Call log permission',
     'batteryUnrestricted': 'Battery unrestricted',
     'receiveSms': 'Receive SMS permission',
     'readSms': 'Read SMS permission',

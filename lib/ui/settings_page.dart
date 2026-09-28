@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/openrouter.dart';
+import '../services/phone_service.dart';
 import '../services/settings_service.dart';
 import 'backup_page.dart';
 import 'diagnostics_page.dart';
@@ -241,6 +242,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ref.read(settingsProvider.notifier).setAutoEstimate(v),
           ),
           const Divider(height: 32),
+          const _SectionHeader('Phone'),
+          const _DialerRole(),
+          const Divider(height: 32),
           const _SectionHeader('Appearance'),
           SwitchListTile(
             secondary: Icon(
@@ -275,6 +279,54 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Taking over the phone role, with what it actually means spelled out.
+class _DialerRole extends ConsumerWidget {
+  const _DialerRole();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDefault = ref.watch(isDefaultDialerProvider).valueOrNull ?? false;
+    final phone = ref.read(phoneServiceProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          leading: Icon(isDefault ? Icons.phone_enabled : Icons.phone_outlined),
+          title: Text(isDefault
+              ? 'This is your default phone app'
+              : 'Set as default phone app'),
+          subtitle: Text(isDefault
+              ? 'Incoming calls ring here and the dial pad places calls'
+              : 'Calls from the Calls tab already work. Take this on and '
+                  'incoming calls ring here too.'),
+          trailing: isDefault ? null : const Icon(Icons.chevron_right),
+          onTap: isDefault
+              ? null
+              : () async {
+                  await phone.requestPermissions();
+                  await phone.requestDefaultDialerRole();
+                  ref.invalidate(isDefaultDialerProvider);
+                },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            isDefault
+                ? 'If a call ever fails to ring properly, hand the role back '
+                    'to your old phone app in Android Settings > Default '
+                    'apps. Nothing else in this app depends on it.'
+                : 'Keep your old phone app installed. Handing the role back '
+                    'in Android Settings takes a few seconds if anything '
+                    'misbehaves.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 }

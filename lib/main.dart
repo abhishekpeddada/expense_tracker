@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/providers.dart';
 import 'services/budget_alerts.dart';
+import 'services/phone_service.dart';
 import 'services/self_transfer.dart';
 import 'services/settings_service.dart';
 import 'services/sms_service.dart';
@@ -12,7 +13,7 @@ import 'ui/chat_page.dart';
 import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/food_page.dart';
-import 'ui/messages_page.dart';
+import 'ui/inbox_page.dart';
 import 'ui/settings_page.dart';
 import 'ui/transactions_page.dart';
 
@@ -76,7 +77,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
   int _index = 0;
 
   static const _titles = [
-    'Messages',
+    'Messages & calls',
     'Transactions',
     'Food',
     'Assistant',
@@ -94,6 +95,9 @@ class _HomeShellState extends ConsumerState<HomeShell>
     final sms = ref.read(smsServiceProvider);
     sms.requestPermissions();
     sms.drainQueue();
+    // Only meaningful once the dialer role is held; harmless before then,
+    // and the call log needs the permission either way.
+    ref.read(phoneServiceProvider).requestPermissions();
     _catchUp();
   }
 
@@ -200,7 +204,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       body: IndexedStack(
         index: _index,
         children: const [
-          MessagesPage(),
+          InboxPage(),
           TransactionsPage(),
           FoodPage(),
           ChatPage(),

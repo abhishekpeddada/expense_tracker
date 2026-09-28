@@ -8,8 +8,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.ContactsContract
+import android.provider.CallLog
 import android.provider.Settings
 import android.provider.Telephony
+import android.telecom.TelecomManager
 import android.telephony.SmsManager
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -21,6 +23,8 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "expense_tracker/sms"
         private const val REQ_SMS_ROLE = 1001
         private const val REQ_NOTIF = 1002
+        private const val REQ_DIALER_ROLE = 1003
+        private const val REQ_PHONE_PERMS = 1004
 
         // Set while a Flutter engine is attached, so broadcast receivers can
         // nudge the UI to drain the queue. Main-thread only.
@@ -32,6 +36,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingRoleResult: MethodChannel.Result? = null
+    private var pendingDialerResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -89,6 +94,51 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
+                "isDefaultDialer" -> result.success(isDefaultDialer())
+                "requestDefaultDialerRole" -> {
+                    if (isDefaultDialer()) {
+                        result.success(true)
+                    } else {
+                        pendingDialerResult = result
+                        val rm = getSystemService(RoleManager::class.java)
+                        startActivityForResult(
+                            rm.createRequestRoleIntent(RoleManager.ROLE_DIALER),
+                            REQ_DIALER_ROLE
+                        )
+                    }
+                }
+                "requestPhonePermissions" -> {
+                    val wanted = mutableListOf(
+                        Manifest.permission.CALL_PHONE,
+                        Manifest.permission.READ_PHONE_STATE,
+                        Manifest.permission.READ_CALL_LOG,
+                        Manifest.permission.READ_CONTACTS,
+                    )
+                    if (isDefaultDialer()) {
+                        wanted.add(Manifest.permission.ANSWER_PHONE_CALLS)
+                    }
+                    val missing = wanted.filter {
+                        checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
+                    }
+                    if (missing.isNotEmpty()) {
+                        ActivityCompat.requestPermissions(
+                            this, missing.toTypedArray(), REQ_PHONE_PERMS
+                        )
+                    }
+                    result.success(null)
+                }
+                "placeCall" -> {
+                    val number = call.argument<String>("number")
+                    if (number.isNullOrBlank()) {
+                        result.error("bad_args", "number is required", null)
+                    } else {
+                        result.success(placeCall(number))
+                    }
+                }
+                "getCallLog" -> {
+                    val limit = call.argument<Int>("limit") ?: 200
+                    result.success(readCallLog(limit))
+                }
                 "getContactName" -> {
                     val number = call.argument<String>("number")
                     result.success(number?.let { lookupContactName(it) })
@@ -122,6 +172,13 @@ class MainActivity : FlutterActivity() {
                     result.success(
                         mapOf(
                             "isDefaultSmsApp" to isDefaultSmsApp(),
+                            "isDefaultDialer" to isDefaultDialer(),
+                            "canPlaceCalls" to (checkSelfPermission(
+                                Manifest.permission.CALL_PHONE
+                            ) == PackageManager.PERMISSION_GRANTED),
+                            "canReadCallLog" to (checkSelfPermission(
+                                Manifest.permission.READ_CALL_LOG
+                            ) == PackageManager.PERMISSION_GRANTED),
                             "batteryUnrestricted" to
                                 pm.isIgnoringBatteryOptimizations(packageName),
                             "receiveSms" to (checkSelfPermission(
@@ -180,6 +237,10 @@ class MainActivity : FlutterActivity() {
             pendingRoleResult?.success(isDefaultSmsApp())
             pendingRoleResult = null
         }
+        if (requestCode == REQ_DIALER_ROLE) {
+            pendingDialerResult?.success(isDefaultDialer())
+            pendingDialerResult = null
+        }
     }
 
     // isRoleHeld is the authoritative check; getDefaultSmsPackage is stale
@@ -188,6 +249,79 @@ class MainActivity : FlutterActivity() {
         val rm = getSystemService(RoleManager::class.java)
         return rm.isRoleHeld(RoleManager.ROLE_SMS) ||
             Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    }
+
+    private fun isDefaultDialer(): Boolean {
+        val rm = getSystemService(RoleManager::class.java)
+        val tm = getSystemService(TelecomManager::class.java)
+        return rm.isRoleHeld(RoleManager.ROLE_DIALER) ||
+            tm?.defaultDialerPackage == packageName
+    }
+
+    /**
+     * Places a call. As the default dialer this goes through Telecom and
+     * our own in-call screen; otherwise it is handed to whichever dialer
+     * the phone is using, so the button still works before the role is
+     * granted.
+     */
+    private fun placeCall(number: String): Boolean {
+        val uri = Uri.fromParts("tel", number, null)
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            val placed = runCatching {
+                getSystemService(TelecomManager::class.java)
+                    ?.placeCall(uri, null)
+            }.isSuccess
+            if (placed) return true
+        }
+        // No permission, or Telecom refused: fall back to the dialer with
+        // the number filled in, which never needs permission.
+        return runCatching {
+            startActivity(
+                Intent(Intent.ACTION_DIAL, uri)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+    }
+
+    /** Recent calls, newest first, for the Calls list. */
+    private fun readCallLog(limit: Int): List<Map<String, Any?>> {
+        if (checkSelfPermission(Manifest.permission.READ_CALL_LOG) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return emptyList()
+
+        return runCatching {
+            val out = mutableListOf<Map<String, Any?>>()
+            contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(
+                    CallLog.Calls._ID,
+                    CallLog.Calls.NUMBER,
+                    CallLog.Calls.CACHED_NAME,
+                    CallLog.Calls.TYPE,
+                    CallLog.Calls.DATE,
+                    CallLog.Calls.DURATION,
+                ),
+                null,
+                null,
+                "${CallLog.Calls.DATE} DESC LIMIT $limit",
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    out.add(
+                        mapOf(
+                            "id" to c.getLong(0),
+                            "number" to c.getString(1),
+                            "name" to c.getString(2),
+                            "type" to c.getInt(3),
+                            "date" to c.getLong(4),
+                            "duration" to c.getLong(5),
+                        )
+                    )
+                }
+            }
+            out
+        }.getOrDefault(emptyList())
     }
 
     private fun lookupContactName(number: String): String? {

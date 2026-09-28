@@ -11,6 +11,18 @@
     <!-- Nutrition lookups against openrouter.ai, when a key is configured. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- Default-phone-app requirements. CALL_PHONE places calls,
+         ANSWER_PHONE_CALLS answers them, and the call log is both read for
+         the recents list and written by the system on our behalf.
+         USE_FULL_SCREEN_INTENT is what allows the incoming call screen to
+         come up over the lock screen on Android 14 and later. -->
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.READ_CALL_LOG"/>
+    <uses-permission android:name="android.permission.WRITE_CALL_LOG"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
     <application
         android:label="Expense Tracker"
         android:name="${applicationName}"
@@ -46,7 +58,67 @@
                 <data android:scheme="mms"/>
                 <data android:scheme="mmsto"/>
             </intent-filter>
+            <!-- Default-phone-app requirement: be offerable as the dialer.
+                 DIAL with and without a number are both required; the
+                 CALL_BUTTON filter is the hardware/assistant call key. -->
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="tel"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tel"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_BUTTON"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
+
+        <!-- The call screen. Its own task so ending a call does not drop
+             the user into the expense tracker, and a plain framework theme
+             so it never waits on anything optional to draw. -->
+        <activity
+            android:name=".InCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="com.abhishek.expense_tracker.call"
+            android:theme="@style/InCallTheme"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"/>
+
+        <!-- Default-phone-app requirement: this is how the system hands us
+             calls. The metadata says we provide the in-call UI; without it
+             the system keeps its own. -->
+        <service
+            android:name=".PhoneInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="true"/>
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_RINGING"
+                android:value="false"/>
+            <intent-filter>
+                <action android:name="android.telecom.InCallService"/>
+            </intent-filter>
+        </service>
+
+        <!-- Answer and Decline on the call notification. -->
+        <receiver
+            android:name=".CallActionReceiver"
+            android:exported="false"/>
 
         <!-- Default-SMS-app requirement: receives incoming SMS when we hold
              ROLE_SMS. Protected by the system-only BROADCAST_SMS permission. -->
