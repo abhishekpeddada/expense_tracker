@@ -200,11 +200,14 @@ class InCallActivity : Activity() {
         replyRow.visibility =
             if (ringing && QuickReply.canSend(this) && number != null)
                 View.VISIBLE else View.GONE
-        // Controls would sit under the ringing layout with nothing to do.
+        // Mute, keypad and speaker only appear once there is a call to
+        // apply them to. Shown-but-greyed while it rings is three dead
+        // buttons; the space is held so nothing jumps when it connects.
+        val connected = CallStore.isOngoing(call)
         controlsRow.visibility = when {
             keypadShowing() -> View.GONE
-            ringing -> View.INVISIBLE
-            else -> View.VISIBLE
+            connected -> View.VISIBLE
+            else -> View.INVISIBLE
         }
         headerBlock.visibility =
             if (keypadShowing()) View.GONE else View.VISIBLE
@@ -212,11 +215,6 @@ class InCallActivity : Activity() {
         hangUpButton.setImageResource(
             if (ringing) R.drawable.ic_call_decline else R.drawable.ic_call_end
         )
-
-        val connected = CallStore.isOngoing(call)
-        muteButton.isEnabled = connected
-        speakerButton.isEnabled = connected
-        keypadButton.isEnabled = connected
 
         val muted = CallStore.isMuted()
         muteButton.setImageResource(
