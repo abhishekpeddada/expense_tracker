@@ -93,16 +93,56 @@ object CallStore {
     fun isMuted(): Boolean = service?.callAudioState?.isMuted == true
 
     fun setSpeaker(on: Boolean) {
-        runCatching {
-            service?.setAudioRoute(
-                if (on) CallAudioState.ROUTE_SPEAKER
-                else CallAudioState.ROUTE_WIRED_OR_EARPIECE
-            )
+        setRoute(
+            if (on) CallAudioState.ROUTE_SPEAKER
+            else CallAudioState.ROUTE_WIRED_OR_EARPIECE
+        )
+    }
+
+    fun isSpeakerOn(): Boolean = currentRoute() == CallAudioState.ROUTE_SPEAKER
+
+    // ---- Audio routes ----
+
+    fun setRoute(route: Int) {
+        runCatching { service?.setAudioRoute(route) }
+    }
+
+    fun currentRoute(): Int =
+        service?.callAudioState?.route ?: CallAudioState.ROUTE_EARPIECE
+
+    /**
+     * Where the call's audio can go right now.
+     *
+     * The mask is whatever hardware is actually connected, so a Bluetooth
+     * headset appears the moment it pairs and disappears when it walks off.
+     * Earpiece and wired headset share a route constant and are reported
+     * as one; the phone decides between them by whether something is
+     * plugged in.
+     */
+    fun availableRoutes(): List<Int> {
+        val mask = service?.callAudioState?.supportedRouteMask ?: 0
+        val wired = mask and CallAudioState.ROUTE_WIRED_HEADSET != 0
+        return buildList {
+            if (wired) {
+                add(CallAudioState.ROUTE_WIRED_HEADSET)
+            } else if (mask and CallAudioState.ROUTE_EARPIECE != 0) {
+                add(CallAudioState.ROUTE_EARPIECE)
+            }
+            if (mask and CallAudioState.ROUTE_SPEAKER != 0) {
+                add(CallAudioState.ROUTE_SPEAKER)
+            }
+            if (mask and CallAudioState.ROUTE_BLUETOOTH != 0) {
+                add(CallAudioState.ROUTE_BLUETOOTH)
+            }
         }
     }
 
-    fun isSpeakerOn(): Boolean =
-        service?.callAudioState?.route == CallAudioState.ROUTE_SPEAKER
+    fun routeLabel(route: Int): String = when (route) {
+        CallAudioState.ROUTE_SPEAKER -> "Speaker"
+        CallAudioState.ROUTE_BLUETOOTH -> "Bluetooth"
+        CallAudioState.ROUTE_WIRED_HEADSET -> "Headset"
+        else -> "Phone"
+    }
 
     fun playDtmf(digit: Char) {
         primary()?.let {

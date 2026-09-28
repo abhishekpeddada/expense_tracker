@@ -11,6 +11,12 @@
     android:paddingTop="72dp"
     android:paddingBottom="40dp">
 
+    <LinearLayout
+        android:id="@+id/call_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
     <TextView
         android:id="@+id/call_status"
         android:layout_width="match_parent"
@@ -75,6 +81,60 @@
         android:textColor="#B0BEC5"
         android:textSize="18sp"
         android:visibility="gone"/>
+
+    </LinearLayout>
+
+    <!-- A real 3x4 pad, shown in place of the header. Tones for phone
+         menus are typed under time pressure; a list of digits to scroll
+         is no use at all. -->
+    <LinearLayout
+        android:id="@+id/call_keypad_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/call_dtmf"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:minHeight="44dp"
+            android:textColor="#FFFFFF"
+            android:textSize="26sp"
+            android:letterSpacing="0.15"/>
+
+        <LinearLayout style="@style/KeypadRow">
+            <Button android:id="@+id/key_1" style="@style/KeypadKey" android:text="1"/>
+            <Button android:id="@+id/key_2" style="@style/KeypadKey" android:text="2"/>
+            <Button android:id="@+id/key_3" style="@style/KeypadKey" android:text="3"/>
+        </LinearLayout>
+        <LinearLayout style="@style/KeypadRow">
+            <Button android:id="@+id/key_4" style="@style/KeypadKey" android:text="4"/>
+            <Button android:id="@+id/key_5" style="@style/KeypadKey" android:text="5"/>
+            <Button android:id="@+id/key_6" style="@style/KeypadKey" android:text="6"/>
+        </LinearLayout>
+        <LinearLayout style="@style/KeypadRow">
+            <Button android:id="@+id/key_7" style="@style/KeypadKey" android:text="7"/>
+            <Button android:id="@+id/key_8" style="@style/KeypadKey" android:text="8"/>
+            <Button android:id="@+id/key_9" style="@style/KeypadKey" android:text="9"/>
+        </LinearLayout>
+        <LinearLayout style="@style/KeypadRow">
+            <Button android:id="@+id/key_star" style="@style/KeypadKey" android:text="*"/>
+            <Button android:id="@+id/key_0" style="@style/KeypadKey" android:text="0"/>
+            <Button android:id="@+id/key_hash" style="@style/KeypadKey" android:text="#"/>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/call_keypad_hide"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:text="Hide keypad"
+            android:textColor="#4DB6AC"
+            android:background="@android:color/transparent"/>
+    </LinearLayout>
 
     <Space
         android:layout_width="match_parent"

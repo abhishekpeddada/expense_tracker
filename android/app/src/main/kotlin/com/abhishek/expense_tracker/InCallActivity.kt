@@ -16,8 +16,10 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.ContactsContract
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.Chronometer
 import android.widget.EditText
 import android.widget.ImageButton
@@ -67,6 +69,9 @@ class InCallActivity : Activity() {
     private lateinit var speakerButton: ImageButton
     private lateinit var speakerLabel: TextView
     private lateinit var keypadButton: ImageButton
+    private lateinit var headerBlock: LinearLayout
+    private lateinit var keypadPanel: LinearLayout
+    private lateinit var dtmfView: TextView
 
     private val main = Handler(Looper.getMainLooper())
     private val onCallsChanged: () -> Unit = { main.post { render() } }
@@ -74,6 +79,9 @@ class InCallActivity : Activity() {
 
     /** Avatar and name lookups are slow enough to be worth doing once. */
     private var shownNumber: String? = null
+
+    /** Tones typed so far this call, shown above the pad. */
+    private val dtmfTyped = StringBuilder()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +105,10 @@ class InCallActivity : Activity() {
         speakerButton = findViewById(R.id.call_speaker)
         speakerLabel = findViewById(R.id.call_speaker_label)
         keypadButton = findViewById(R.id.call_keypad)
+        headerBlock = findViewById(R.id.call_header)
+        keypadPanel = findViewById(R.id.call_keypad_panel)
+        dtmfView = findViewById(R.id.call_dtmf)
+        wireKeypad()
 
         answerButton.setOnClickListener { CallStore.answer() }
         hangUpButton.setOnClickListener { CallStore.hangUp() }
@@ -104,11 +116,8 @@ class InCallActivity : Activity() {
             CallStore.setMuted(!CallStore.isMuted())
             render()
         }
-        speakerButton.setOnClickListener {
-            CallStore.setSpeaker(!CallStore.isSpeakerOn())
-            render()
-        }
-        keypadButton.setOnClickListener { showKeypad() }
+        speakerButton.setOnClickListener { onAudioButton() }
+        keypadButton.setOnClickListener { setKeypadVisible(true) }
         findViewById<ImageButton>(R.id.call_reply).setOnClickListener {
             showQuickReplies()
         }
@@ -151,6 +160,10 @@ class InCallActivity : Activity() {
     /** Back must not hang up, and must not hide a ringing call either. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (keypadShowing()) {
+            setKeypadVisible(false)
+            return
+        }
         val call = CallStore.primary()
         if (call != null && CallStore.isIncoming(call)) return
         @Suppress("DEPRECATION")
@@ -180,12 +193,21 @@ class InCallActivity : Activity() {
         }
 
         val ringing = CallStore.isIncoming(call)
+        // A new call arriving while the pad is open takes the screen back.
+        if (ringing && keypadShowing()) setKeypadVisible(false)
+
         answerColumn.visibility = if (ringing) View.VISIBLE else View.GONE
         replyRow.visibility =
             if (ringing && QuickReply.canSend(this) && number != null)
                 View.VISIBLE else View.GONE
         // Controls would sit under the ringing layout with nothing to do.
-        controlsRow.visibility = if (ringing) View.INVISIBLE else View.VISIBLE
+        controlsRow.visibility = when {
+            keypadShowing() -> View.GONE
+            ringing -> View.INVISIBLE
+            else -> View.VISIBLE
+        }
+        headerBlock.visibility =
+            if (keypadShowing()) View.GONE else View.VISIBLE
         hangUpLabel.text = if (ringing) "Decline" else "End"
         hangUpButton.setImageResource(
             if (ringing) R.drawable.ic_call_decline else R.drawable.ic_call_end
@@ -203,10 +225,7 @@ class InCallActivity : Activity() {
         muteLabel.text = if (muted) "Unmute" else "Mute"
         setActive(muteButton, muted)
 
-        val speaker = CallStore.isSpeakerOn()
-        speakerLabel.text = if (speaker) "Speaker on" else "Speaker"
-        setActive(speakerButton, speaker)
-
+        renderAudioButton()
         renderTimer(call)
 
         if (CallStore.stateOf(call) == Call.STATE_DISCONNECTED) {
@@ -359,18 +378,86 @@ class InCallActivity : Activity() {
         CallStore.hangUp()
     }
 
-    /** DTMF tones for phone menus, once a call is connected. */
-    private fun showKeypad() {
-        val digits = arrayOf(
-            "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"
+    // ---- Keypad ----
+
+    private fun wireKeypad() {
+        val keys = listOf(
+            R.id.key_1 to '1', R.id.key_2 to '2', R.id.key_3 to '3',
+            R.id.key_4 to '4', R.id.key_5 to '5', R.id.key_6 to '6',
+            R.id.key_7 to '7', R.id.key_8 to '8', R.id.key_9 to '9',
+            R.id.key_star to '*', R.id.key_0 to '0', R.id.key_hash to '#',
         )
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Keypad")
-            .setItems(digits) { _, which ->
-                CallStore.playDtmf(digits[which][0])
-                showKeypad()
+        for ((id, digit) in keys) {
+            findViewById<Button>(id).setOnClickListener {
+                CallStore.playDtmf(digit)
+                dtmfTyped.append(digit)
+                dtmfView.text = dtmfTyped.toString()
             }
-            .setNegativeButton("Done", null)
+        }
+        findViewById<Button>(R.id.call_keypad_hide).setOnClickListener {
+            setKeypadVisible(false)
+        }
+    }
+
+    /** The pad takes the place of the header rather than covering it. */
+    private fun setKeypadVisible(visible: Boolean) {
+        keypadPanel.visibility = if (visible) View.VISIBLE else View.GONE
+        headerBlock.visibility = if (visible) View.GONE else View.VISIBLE
+        controlsRow.visibility = if (visible) View.GONE else View.VISIBLE
+        if (!visible) {
+            dtmfTyped.clear()
+            dtmfView.text = ""
+        }
+    }
+
+    private fun keypadShowing(): Boolean =
+        keypadPanel.visibility == View.VISIBLE
+
+    // ---- Audio routing ----
+
+    /**
+     * With only the earpiece and the speaker there is nothing to choose
+     * between, so the button stays a toggle. A headset or a Bluetooth
+     * device turns it into a picker, because then it is a real question.
+     */
+    private fun onAudioButton() {
+        val routes = CallStore.availableRoutes()
+        if (routes.size <= 2) {
+            CallStore.setSpeaker(!CallStore.isSpeakerOn())
+            render()
+            return
+        }
+
+        val current = CallStore.currentRoute()
+        val labels = routes.map { route ->
+            val mark = if (route == current) "  \u2713" else ""
+            CallStore.routeLabel(route) + mark
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Call audio")
+            .setItems(labels.toTypedArray()) { _, which ->
+                CallStore.setRoute(routes[which])
+                render()
+            }
             .show()
+    }
+
+    private fun renderAudioButton() {
+        val route = CallStore.currentRoute()
+        val icon = when (route) {
+            CallAudioState.ROUTE_BLUETOOTH -> R.drawable.ic_bluetooth
+            CallAudioState.ROUTE_WIRED_HEADSET -> R.drawable.ic_headset
+            CallAudioState.ROUTE_SPEAKER -> R.drawable.ic_volume_up
+            else -> R.drawable.ic_phone_in_talk
+        }
+        speakerButton.setImageResource(icon)
+        speakerLabel.text = CallStore.routeLabel(route)
+        // Anything other than holding it to your ear is a deliberate
+        // choice, so it reads as one.
+        setActive(
+            speakerButton,
+            route == CallAudioState.ROUTE_SPEAKER ||
+                route == CallAudioState.ROUTE_BLUETOOTH
+        )
     }
 }
