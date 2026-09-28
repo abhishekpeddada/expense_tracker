@@ -157,7 +157,41 @@ class SmsService {
         debugPrint('Failed to ingest SMS entry: $err');
       }
     }
+    await _drainSent();
     await _applyPendingCategories();
+  }
+
+  /// Picks up messages the native side sent on its own - a quick reply to
+  /// a ringing call goes out before any Dart engine is running - so the
+  /// conversation shows them like anything else sent from the app.
+  Future<void> _drainSent() async {
+    List<Object?> entries;
+    try {
+      entries =
+          await _channel.invokeMethod<List<Object?>>('drainSentQueue') ?? [];
+    } on MissingPluginException {
+      return;
+    }
+    for (final e in entries) {
+      final m = (e as Map).cast<String, Object?>();
+      final to = m['to'] as String? ?? '';
+      final body = m['body'] as String? ?? '';
+      if (to.isEmpty || body.isEmpty) continue;
+      final at = DateTime.fromMillisecondsSinceEpoch(
+          (m['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch);
+      try {
+        if (await _db.hasMessage(to, body, at)) continue;
+        await _db.insertMessage(SmsMessagesCompanion.insert(
+          sender: to,
+          body: body,
+          receivedAt: at,
+          outgoing: const Value(true),
+          read: const Value(true),
+        ));
+      } catch (err) {
+        debugPrint('Failed to record a sent message: $err');
+      }
+    }
   }
 
   /// Applies category picks made on notifications for transactions that were

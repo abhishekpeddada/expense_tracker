@@ -5,32 +5,55 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0B0F10"
-    android:padding="24dp">
-
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
+    android:background="#0A0E11"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="72dp"
+    android:paddingBottom="40dp">
 
     <TextView
         android:id="@+id/call_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:textColor="#80CBC4"
-        android:textSize="16sp"
-        android:letterSpacing="0.08"
-        android:textStyle="bold"/>
+        android:textColor="#4DB6AC"
+        android:textSize="15sp"
+        android:letterSpacing="0.12"
+        android:textAllCaps="true"/>
+
+    <!-- Photo when the contact has one, initials otherwise. -->
+    <FrameLayout
+        android:layout_width="112dp"
+        android:layout_height="112dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="28dp">
+
+        <TextView
+            android:id="@+id/call_initials"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_circle_avatar"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="40sp"/>
+
+        <ImageView
+            android:id="@+id/call_photo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="@null"/>
+    </FrameLayout>
 
     <TextView
         android:id="@+id/call_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="24dp"
         android:gravity="center"
         android:textColor="#FFFFFF"
-        android:textSize="30sp"
+        android:textSize="32sp"
         android:maxLines="2"
         android:ellipsize="end"/>
 
@@ -40,7 +63,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:gravity="center"
-        android:textColor="#B0BEC5"
+        android:textColor="#90A4AE"
         android:textSize="16sp"/>
 
     <Chronometer
@@ -58,59 +81,100 @@
         android:layout_height="0dp"
         android:layout_weight="1"/>
 
+    <!-- Mute, keypad and speaker, once there is a call to apply them to. -->
     <LinearLayout
+        android:id="@+id/call_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="32dp">
+        android:layout_marginBottom="40dp">
 
-        <Button
-            android:id="@+id/call_mute"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:text="Mute"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#37474F"/>
+        <LinearLayout style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_mute"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_mic"
+                android:contentDescription="Mute"/>
+            <TextView android:id="@+id/call_mute_label"
+                style="@style/CallControlLabel"
+                android:text="Mute"/>
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/call_speaker"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="Speaker"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#37474F"/>
+        <LinearLayout style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_keypad"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_dialpad"
+                android:contentDescription="Keypad"/>
+            <TextView style="@style/CallControlLabel"
+                android:text="Keypad"/>
+        </LinearLayout>
+
+        <LinearLayout style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_speaker"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_volume_up"
+                android:contentDescription="Speaker"/>
+            <TextView android:id="@+id/call_speaker_label"
+                style="@style/CallControlLabel"
+                android:text="Speaker"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Reply with a message instead of answering. -->
+    <LinearLayout
+        android:id="@+id/call_reply_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginBottom="36dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/call_reply"
+            style="@style/CallControlButton"
+            android:src="@drawable/ic_message"
+            android:contentDescription="Reply with a message"/>
+        <TextView style="@style/CallControlLabel"
+            android:text="Reply"/>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:gravity="center">
 
-        <Button
-            android:id="@+id/call_answer"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:text="Answer"
-            android:textSize="18sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#2E7D32"/>
+        <LinearLayout
+            android:id="@+id/call_hangup_column"
+            style="@style/CallActionColumn">
+            <ImageButton
+                android:id="@+id/call_hangup"
+                style="@style/CallActionButton"
+                android:background="@drawable/bg_circle_red"
+                android:src="@drawable/ic_call_end"
+                android:contentDescription="End call"/>
+            <TextView android:id="@+id/call_hangup_label"
+                style="@style/CallControlLabel"
+                android:text="End"/>
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/call_hangup"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="End"
-            android:textSize="18sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#C62828"/>
+        <LinearLayout
+            android:id="@+id/call_answer_column"
+            style="@style/CallActionColumn"
+            android:visibility="gone">
+            <ImageButton
+                android:id="@+id/call_answer"
+                style="@style/CallActionButton"
+                android:background="@drawable/bg_circle_green"
+                android:src="@drawable/ic_call"
+                android:contentDescription="Answer"/>
+            <TextView style="@style/CallControlLabel"
+                android:text="Answer"/>
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>

@@ -144,6 +144,7 @@ class MainActivity : FlutterActivity() {
                     result.success(number?.let { lookupContactName(it) })
                 }
                 "drainSmsQueue" -> result.success(SmsQueue.drain(this))
+                "drainSentQueue" -> result.success(SmsQueue.drainSent(this))
                 "getReceiveLog" -> result.success(SmsQueue.readLog(this))
                 "getAppVersion" -> {
                     val info = packageManager.getPackageInfo(packageName, 0)

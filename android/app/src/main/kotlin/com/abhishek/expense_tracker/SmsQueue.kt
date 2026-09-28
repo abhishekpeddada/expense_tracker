@@ -17,6 +17,7 @@ object SmsQueue {
     private const val LOG_MAX = 50
     private const val KEY_SEEN = "seen_keys"
     private const val SEEN_MAX = 40
+    private const val KEY_SENT = "sent_queue"
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -31,6 +32,40 @@ object SmsQueue {
             put("ts", ts)
         })
         prefs(ctx).edit().putString(KEY, arr.toString()).apply()
+    }
+
+    /**
+     * Records a message this app sent from native code, so the Flutter side
+     * can put it in the conversation. A quick reply is sent while a call is
+     * ringing, long before any Dart engine is necessarily running.
+     */
+    @Synchronized
+    fun addSent(ctx: Context, to: String, body: String, ts: Long) {
+        val arr = JSONArray(prefs(ctx).getString(KEY_SENT, "[]"))
+        arr.put(JSONObject().apply {
+            put("to", to)
+            put("body", body)
+            put("ts", ts)
+        })
+        prefs(ctx).edit().putString(KEY_SENT, arr.toString()).apply()
+    }
+
+    @Synchronized
+    fun drainSent(ctx: Context): List<Map<String, Any?>> {
+        val arr = JSONArray(prefs(ctx).getString(KEY_SENT, "[]"))
+        val out = mutableListOf<Map<String, Any?>>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            out.add(
+                mapOf(
+                    "to" to o.optString("to"),
+                    "body" to o.optString("body"),
+                    "ts" to o.optLong("ts"),
+                )
+            )
+        }
+        prefs(ctx).edit().putString(KEY_SENT, "[]").apply()
+        return out
     }
 
     /** Records the category picked from a notification quick-action. */

@@ -5,4 +5,44 @@
     <style name="InCallTheme" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
     </style>
+
+    <style name="CallControlColumn">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_horizontal</item>
+    </style>
+
+    <style name="CallControlButton">
+        <item name="android:layout_width">60dp</item>
+        <item name="android:layout_height">60dp</item>
+        <item name="android:background">@drawable/bg_circle_slate</item>
+        <item name="android:scaleType">center</item>
+        <item name="android:tint">#FFFFFF</item>
+    </style>
+
+    <style name="CallActionColumn">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_horizontal</item>
+        <item name="android:layout_marginStart">28dp</item>
+        <item name="android:layout_marginEnd">28dp</item>
+    </style>
+
+    <style name="CallActionButton">
+        <item name="android:layout_width">76dp</item>
+        <item name="android:layout_height">76dp</item>
+        <item name="android:scaleType">center</item>
+        <item name="android:tint">#FFFFFF</item>
+    </style>
+
+    <style name="CallControlLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">10dp</item>
+        <item name="android:textColor">#B0BEC5</item>
+        <item name="android:textSize">13sp</item>
+    </style>
 </resources>
