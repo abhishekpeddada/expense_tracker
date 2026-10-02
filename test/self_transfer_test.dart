@@ -6,6 +6,11 @@ import 'package:expense_tracker/services/insights.dart';
 import 'package:expense_tracker/services/self_transfer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// What the dashboard would call "spent": every debit the category
+/// breakdown keeps, which is to say everything that is not internal.
+double _spend(List<Transaction> txns) =>
+    Insights.byCategory(txns).values.fold(0.0, (sum, v) => sum + v);
+
 void main() {
   final noon = DateTime(2026, 9, 15, 12);
 
@@ -49,9 +54,10 @@ void main() {
       expect(Insights.byCategory(txns)[Categories.selfTransfer], isNull);
       expect(Insights.received(txns), 40000);
       expect(Insights.internal(txns), 10000);
-      // Spend is reachable through the monthly total for this month.
-      final month = Insights.monthlyTotals(txns, months: 1).single.value;
-      expect(month, 300);
+      // Summed from the category breakdown rather than the monthly total:
+      // the monthly one is counted back from today, so a fixture dated in
+      // a fixed month starts failing the moment the month rolls over.
+      expect(_spend(txns), 300);
     });
 
     test('a transfer to somebody else is still spending', () {
@@ -130,7 +136,7 @@ void main() {
         txn(id: 3, amount: 21000, type: TxnType.debit, bank: 'HDFC',
             category: 'Pg'),
       ];
-      expect(Insights.monthlyTotals(txns, months: 1).single.value, 21000);
+      expect(_spend(txns), 21000);
       expect(Insights.byCategory(txns).keys, ['Pg']);
       expect(Insights.internal(txns), 127467);
     });
