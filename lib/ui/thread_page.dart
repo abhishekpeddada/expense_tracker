@@ -10,6 +10,7 @@ import '../data/providers.dart';
 import '../parsing/message_links.dart';
 import '../services/sms_service.dart';
 import 'compose_page.dart';
+import 'transaction_edit_page.dart';
 import 'message_body.dart';
 
 final _timeFmt = DateFormat('d MMM, h:mm a');
@@ -120,8 +121,38 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
 
   /// Long-press menu on a message: forward it, copy it, share it out, grab
   /// the code in it, or delete it.
+  /// Records a transaction from this message.
+  ///
+  /// The form opens filled in rather than the transaction being written
+  /// straight away: the parser may have found nothing, or the wrong thing,
+  /// and a row appearing silently in the totals is worse than a form.
+  Future<void> _recordTransaction(BuildContext context, SmsMessage m) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final draft = draftTransactionFromMessage(m);
+
+    final id = await navigator.push<int>(
+      MaterialPageRoute(
+        builder: (_) => TransactionEditPage(prefill: draft),
+      ),
+    );
+    if (id == null) return;
+
+    await ref.read(dbProvider).setMessageIsTransaction(m.id, true);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Transaction recorded')),
+    );
+  }
+
   Future<void> _messageActions(BuildContext context, SmsMessage m) async {
     final code = MessageLinks.code(m.body);
+    final db = ref.read(dbProvider);
+    // Both are cheap and settle what the entry should say before the sheet
+    // is up, rather than the label changing under the user's thumb.
+    final alreadyRecorded = await db.hasTransactionFromSms(m.body);
+    final readable = messageLooksLikeTransaction(m);
+    if (!context.mounted) return;
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -141,6 +172,23 @@ class _ThreadPageState extends ConsumerState<ThreadPage> {
                   );
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: Text(alreadyRecorded
+                  ? 'Record as transaction again'
+                  : 'Record as transaction'),
+              subtitle: Text(
+                alreadyRecorded
+                    ? 'This message already has one'
+                    : readable
+                        ? 'Check the details, then save'
+                        : 'No amount found here, so type it in',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _recordTransaction(context, m);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.forward_outlined),
               title: const Text('Forward'),

@@ -220,6 +220,20 @@ class AppDb extends _$AppDb {
   Future<void> restoreTransaction(Transaction txn) =>
       into(transactions).insert(txn, mode: InsertMode.insertOrReplace);
 
+  /// Whether this exact SMS has already produced a transaction. Used to
+  /// say so on the message rather than offering to record it twice.
+  Future<bool> hasTransactionFromSms(String rawSms) async {
+    final q = select(transactions)
+      ..where((t) => t.rawSms.equals(rawSms))
+      ..limit(1);
+    return (await q.get()).isNotEmpty;
+  }
+
+  /// Marks a stored message as having produced a transaction, or not.
+  Future<void> setMessageIsTransaction(int id, bool value) =>
+      (update(smsMessages)..where((m) => m.id.equals(id)))
+          .write(SmsMessagesCompanion(isTransaction: Value(value)));
+
   /// Duplicate check used by statement import: same day, amount, type, and
   /// description means the row was already imported (or came in via SMS).
   Future<bool> hasSimilarTransaction(

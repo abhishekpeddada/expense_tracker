@@ -118,6 +118,39 @@ final accountsProvider = Provider<List<DerivedAccount>>((ref) {
   return accounts;
 });
 
+/// Builds an unsaved transaction from a message already in the inbox, so
+/// the edit screen can open with everything the parser could work out.
+///
+/// Used to put a transaction back when one was deleted by mistake, and to
+/// record one from a message the parser passed over at the time. Nothing is
+/// written here: what comes back is a draft to be confirmed.
+Transaction draftTransactionFromMessage(SmsMessage message) {
+  final parsed = SmsParser.parse(message.body, sender: message.sender);
+  return Transaction(
+    // Never saved under this id; the insert allocates a real one.
+    id: 0,
+    amount: parsed?.amount ?? 0,
+    type: parsed?.type ?? TxnType.debit,
+    accountKind: parsed?.accountKind ?? AccountKind.bank,
+    accountTail: parsed?.accountTail,
+    merchant: MerchantName.display(parsed?.merchant),
+    bank: parsed?.bank,
+    balance: parsed?.balance,
+    // The message itself is kept so the transaction still points back at
+    // where it came from, exactly as it would have when it first arrived.
+    rawSms: message.body,
+    smsSender: message.sender,
+    source: 'sms',
+    occurredAt: message.receivedAt,
+    createdAt: DateTime.now(),
+    synced: false,
+  );
+}
+
+/// Whether the parser can read an amount out of this message at all.
+bool messageLooksLikeTransaction(SmsMessage message) =>
+    SmsParser.parse(message.body, sender: message.sender) != null;
+
 class IngestResult {
   final ParsedTransaction? parsed;
 

@@ -11,7 +11,13 @@ import '../models/models.dart';
 class TransactionEditPage extends ConsumerStatefulWidget {
   /// Null when adding a new transaction.
   final Transaction? existing;
-  const TransactionEditPage({super.key, this.existing});
+
+  /// A draft to open with, for a transaction being created rather than
+  /// edited - recording one from a message, say. The fields are filled in
+  /// from it, but saving inserts a new row rather than updating anything.
+  final Transaction? prefill;
+
+  const TransactionEditPage({super.key, this.existing, this.prefill});
 
   @override
   ConsumerState<TransactionEditPage> createState() =>
@@ -36,9 +42,11 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
   @override
   void initState() {
     super.initState();
-    final e = widget.existing;
+    final e = widget.existing ?? widget.prefill;
     _amount = TextEditingController(
-        text: e == null ? '' : e.amount.toStringAsFixed(2));
+        // A draft with no amount means the parser found none; the field is
+        // left empty to be typed rather than showing a made-up zero.
+        text: e == null || e.amount == 0 ? '' : e.amount.toStringAsFixed(2));
     _merchant = TextEditingController(text: e?.merchant ?? '');
     _bank = TextEditingController(text: e?.bank ?? '');
     _tail = TextEditingController(text: e?.accountTail ?? '');
@@ -65,6 +73,7 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
     final db = ref.read(dbProvider);
     final amount = double.parse(_amount.text.trim());
     final navigator = Navigator.of(context);
+    int? newId;
 
     if (_isEdit) {
       await db.updateTransaction(
@@ -80,7 +89,8 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
         occurredAt: _when,
       );
     } else {
-      await db.insertTransaction(TransactionsCompanion.insert(
+      final from = widget.prefill;
+      newId = await db.insertTransaction(TransactionsCompanion.insert(
         amount: amount,
         type: _type,
         accountKind: _kind,
@@ -89,6 +99,12 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
         accountTail: Value(_text(_tail)),
         category: Value(_category),
         note: Value(_text(_note)),
+        // Carried from the draft so a transaction recorded from a message
+        // still points back at the message it came from.
+        rawSms: Value(from?.rawSms),
+        smsSender: Value(from?.smsSender),
+        balance: Value(from?.balance),
+        source: Value(from == null ? 'manual' : 'sms'),
         occurredAt: _when,
       ));
     }
@@ -97,7 +113,9 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
     if (_category != null) {
       await ref.read(categorizerProvider).learn(_text(_merchant), _category!);
     }
-    navigator.pop();
+    // The id goes back to whoever opened this, so a message can record
+    // that it produced this transaction.
+    navigator.pop(newId);
   }
 
   @override
