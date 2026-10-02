@@ -153,10 +153,15 @@ class PhoneService {
     }
   }
 
-  Future<bool> call(String number) async {
+  /// Places a call. [video] asks for video up front, which only connects
+  /// as video where the carrier carries it; Telecom falls back to audio
+  /// rather than failing outright.
+  Future<bool> call(String number, {bool video = false}) async {
     try {
-      return await _channel
-              .invokeMethod<bool>('placeCall', {'number': number}) ??
+      return await _channel.invokeMethod<bool>(
+            'placeCall',
+            {'number': number, 'video': video},
+          ) ??
           false;
     } on MissingPluginException {
       return false;

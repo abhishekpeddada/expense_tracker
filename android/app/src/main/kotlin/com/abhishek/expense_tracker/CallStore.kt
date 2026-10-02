@@ -45,15 +45,79 @@ object CallStore {
     }
 
     /**
-     * The call the screen should be about: a ringing one first, since that
-     * is what needs answering, then whatever else is going on.
+     * The call the screen is about.
+     *
+     * A call already in progress outranks one that is ringing. That is the
+     * opposite of what it looks like it should be, and it matters: during
+     * call waiting the person is mid-conversation, and swapping the whole
+     * screen to the new caller would hide the call they are actually on
+     * along with the button to end it. The second call gets its own strip
+     * instead.
      */
     @Synchronized
-    fun primary(): Call? =
-        calls.firstOrNull { stateOf(it) == Call.STATE_RINGING } ?: calls.firstOrNull()
+    fun primary(): Call? = ongoing() ?: ringing() ?: calls.firstOrNull()
+
+    /** The call ringing right now, if any. */
+    @Synchronized
+    fun ringing(): Call? =
+        calls.firstOrNull { stateOf(it) == Call.STATE_RINGING }
+
+    /** A connected call, preferring an active one over a held one. */
+    @Synchronized
+    fun ongoing(): Call? =
+        calls.firstOrNull { stateOf(it) == Call.STATE_ACTIVE }
+            ?: calls.firstOrNull { stateOf(it) == Call.STATE_HOLDING }
+            ?: calls.firstOrNull { stateOf(it) == Call.STATE_DIALING }
+            ?: calls.firstOrNull { stateOf(it) == Call.STATE_CONNECTING }
+
+    @Synchronized
+    fun held(): Call? =
+        calls.firstOrNull { stateOf(it) == Call.STATE_HOLDING }
+
+    /**
+     * The call the screen mentions second: whoever is waiting, or whoever
+     * is on hold while someone else talks.
+     */
+    @Synchronized
+    fun secondary(): Call? {
+        val main = primary() ?: return null
+        return calls.firstOrNull { it !== main && !isConference(it) }
+    }
+
+    @Synchronized
+    fun count(): Int = calls.size
 
     @Synchronized
     fun isEmpty(): Boolean = calls.isEmpty()
+
+    // ---- Capabilities ----
+
+    private fun can(call: Call?, capability: Int): Boolean =
+        call?.details?.can(capability) == true
+
+    fun canHold(call: Call? = primary()): Boolean =
+        can(call, Call.Details.CAPABILITY_HOLD)
+
+    fun canMerge(call: Call? = primary()): Boolean =
+        can(call, Call.Details.CAPABILITY_MERGE_CONFERENCE)
+
+    fun canSwap(call: Call? = primary()): Boolean =
+        can(call, Call.Details.CAPABILITY_SWAP_CONFERENCE) ||
+            (held() != null && ongoing() != null)
+
+    fun isConference(call: Call): Boolean =
+        call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true
+
+    /** Whether this line can carry video, which is a carrier question. */
+    fun canVideo(call: Call? = primary()): Boolean =
+        can(call, Call.Details.CAPABILITY_SUPPORTS_VT_LOCAL_BIDIRECTIONAL) &&
+            can(call, Call.Details.CAPABILITY_SUPPORTS_VT_REMOTE_BIDIRECTIONAL)
+
+    fun isVideo(call: Call? = primary()): Boolean {
+        val state = call?.details?.videoState ?: return false
+        return VideoProfile.isBidirectional(state) ||
+            VideoProfile.isReceptionEnabled(state)
+    }
 
     fun addListener(listener: () -> Unit) {
         synchronized(listeners) { listeners.add(listener) }
@@ -70,8 +134,29 @@ object CallStore {
 
     // ---- Actions, all null-safe so a stale screen cannot crash ----
 
-    fun answer() {
-        primary()?.let { runCatching { it.answer(VideoProfile.STATE_AUDIO_ONLY) } }
+    /**
+     * Answers whatever is ringing. Telecom holds an existing call for us,
+     * so this is also the answer to a second call arriving mid-conversation.
+     */
+    fun answer(video: Boolean = false) {
+        val call = ringing() ?: primary() ?: return
+        runCatching {
+            call.answer(
+                if (video) VideoProfile.STATE_BIDIRECTIONAL
+                else VideoProfile.STATE_AUDIO_ONLY
+            )
+        }
+    }
+
+    /** Ends the call in progress and answers the one that is ringing. */
+    fun endAndAnswer() {
+        val waiting = ringing() ?: return
+        ongoing()?.let { runCatching { it.disconnect() } }
+        runCatching { waiting.answer(VideoProfile.STATE_AUDIO_ONLY) }
+    }
+
+    fun rejectWaiting() {
+        ringing()?.let { runCatching { it.reject(false, null) } }
     }
 
     /** Rejects a ringing call, or ends one already connected. */
@@ -85,6 +170,88 @@ object CallStore {
             }
         }
     }
+
+    fun hangUp(call: Call) {
+        runCatching {
+            if (stateOf(call) == Call.STATE_RINGING) call.reject(false, null)
+            else call.disconnect()
+        }
+    }
+
+    // ---- Two calls at once ----
+
+    fun hold() {
+        ongoing()?.let { runCatching { it.hold() } }
+    }
+
+    fun unhold() {
+        held()?.let { runCatching { it.unhold() } }
+    }
+
+    fun isOnHold(): Boolean = stateOf(primary() ?: return false) ==
+        Call.STATE_HOLDING
+
+    /**
+     * Swaps which call you are talking to. Telecom holds the active one as
+     * a side effect of resuming the other, so unholding is the whole move.
+     */
+    fun swap() {
+        val other = held() ?: return
+        runCatching { other.unhold() }
+    }
+
+    /** Joins the two calls into a conference. */
+    fun merge() {
+        val a = calls.firstOrNull { stateOf(it) == Call.STATE_ACTIVE }
+        val b = calls.firstOrNull { it !== a && stateOf(it) == Call.STATE_HOLDING }
+        if (a == null || b == null) return
+        runCatching { a.conference(b) }
+    }
+
+    /** Pulls one party back out of a conference. */
+    fun splitFromConference(call: Call) {
+        runCatching { call.splitFromConference() }
+    }
+
+    @Synchronized
+    fun conferenceChildren(): List<Call> =
+        primary()?.children ?: emptyList()
+
+    // ---- Video ----
+
+    /** Asks the other side to turn the call into a video call. */
+    fun requestVideo() {
+        val call = primary() ?: return
+        runCatching {
+            call.videoCall?.sendSessionModifyRequest(
+                VideoProfile(VideoProfile.STATE_BIDIRECTIONAL)
+            )
+        }
+    }
+
+    /** Drops back to audio, keeping the call up. */
+    fun stopVideo() {
+        val call = primary() ?: return
+        runCatching {
+            call.videoCall?.sendSessionModifyRequest(
+                VideoProfile(VideoProfile.STATE_AUDIO_ONLY)
+            )
+        }
+    }
+
+    fun respondToVideoRequest(accept: Boolean) {
+        val call = primary() ?: return
+        runCatching {
+            call.videoCall?.sendSessionModifyResponse(
+                VideoProfile(
+                    if (accept) VideoProfile.STATE_BIDIRECTIONAL
+                    else VideoProfile.STATE_AUDIO_ONLY
+                )
+            )
+        }
+    }
+
+    fun videoCallOf(call: Call? = primary()) = call?.videoCall
 
     fun setMuted(muted: Boolean) {
         runCatching { service?.setMuted(muted) }

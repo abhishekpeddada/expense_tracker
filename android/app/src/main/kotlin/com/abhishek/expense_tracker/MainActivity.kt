@@ -118,6 +118,9 @@ class MainActivity : FlutterActivity() {
                     )
                     if (isDefaultDialer()) {
                         wanted.add(Manifest.permission.ANSWER_PHONE_CALLS)
+                        // Only useful for video calls, but asking during a
+                        // ringing one would be the worst possible moment.
+                        wanted.add(Manifest.permission.CAMERA)
                     }
                     val missing = wanted.filter {
                         checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
@@ -131,10 +134,11 @@ class MainActivity : FlutterActivity() {
                 }
                 "placeCall" -> {
                     val number = call.argument<String>("number")
+                    val video = call.argument<Boolean>("video") ?: false
                     if (number.isNullOrBlank()) {
                         result.error("bad_args", "number is required", null)
                     } else {
-                        result.success(placeCall(number))
+                        result.success(placeCall(number, video))
                     }
                 }
                 "getVoicemail" -> result.success(voicemailInfo())
@@ -283,14 +287,23 @@ class MainActivity : FlutterActivity() {
      * the phone is using, so the button still works before the role is
      * granted.
      */
-    private fun placeCall(number: String): Boolean {
+    private fun placeCall(number: String, video: Boolean = false): Boolean {
         val uri = Uri.fromParts("tel", number, null)
         if (checkSelfPermission(Manifest.permission.CALL_PHONE) ==
             PackageManager.PERMISSION_GRANTED
         ) {
+            // Asking for video up front only works where the carrier
+            // carries it; Telecom falls back to audio where it does not.
+            val extras = if (video) android.os.Bundle().apply {
+                putInt(
+                    TelecomManager.EXTRA_START_CALL_WITH_VIDEO_STATE,
+                    android.telecom.VideoProfile.STATE_BIDIRECTIONAL
+                )
+            } else null
+
             val placed = runCatching {
                 getSystemService(TelecomManager::class.java)
-                    ?.placeCall(uri, null)
+                    ?.placeCall(uri, extras)
             }.isSuccess
             if (placed) return true
         }

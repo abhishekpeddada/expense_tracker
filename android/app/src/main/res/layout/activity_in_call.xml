@@ -1,15 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Framework widgets only. This screen has to render on a locked phone
-     during a ring; it is not the place to depend on anything optional. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     during a ring; it is not the place to depend on anything optional.
+
+     A frame rather than a plain column, because a video call paints behind
+     everything else: the far end fills the screen and the controls sit on
+     top of it. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#0A0E11"
-    android:paddingStart="24dp"
-    android:paddingEnd="24dp"
-    android:paddingTop="72dp"
-    android:paddingBottom="40dp">
+    android:background="#0A0E11">
+
+    <!-- The far end, once a call carries video. -->
+    <TextureView
+        android:id="@+id/video_remote"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"/>
+
+    <!-- Your own camera, small and out of the way. -->
+    <TextureView
+        android:id="@+id/video_preview"
+        android:layout_width="108dp"
+        android:layout_height="144dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="88dp"
+        android:layout_marginEnd="20dp"
+        android:visibility="gone"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="60dp"
+        android:paddingBottom="40dp">
+
+    <!-- The other call: whoever is on hold, or whoever is calling while
+         you are already talking. -->
+    <LinearLayout
+        android:id="@+id/call_second_strip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#16212A"
+        android:padding="12dp"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/call_second_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"/>
+
+        <TextView
+            android:id="@+id/call_second_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#90A4AE"
+            android:textSize="13sp"/>
+
+        <!-- Only while a second call is actually ringing. -->
+        <LinearLayout
+            android:id="@+id/call_waiting_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="10dp"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/call_waiting_answer"
+                style="@style/WaitingButton"
+                android:text="Hold and answer"
+                android:backgroundTint="#1B9E4B"/>
+
+            <Button
+                android:id="@+id/call_waiting_end_answer"
+                style="@style/WaitingButton"
+                android:text="End and answer"
+                android:backgroundTint="#37474F"/>
+
+            <Button
+                android:id="@+id/call_waiting_decline"
+                style="@style/WaitingButton"
+                android:text="Decline"
+                android:backgroundTint="#E53935"/>
+        </LinearLayout>
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/call_header"
@@ -17,71 +99,71 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/call_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:textColor="#4DB6AC"
-        android:textSize="15sp"
-        android:letterSpacing="0.12"
-        android:textAllCaps="true"/>
+        <TextView
+            android:id="@+id/call_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#4DB6AC"
+            android:textSize="15sp"
+            android:letterSpacing="0.12"
+            android:textAllCaps="true"/>
 
-    <!-- Photo when the contact has one, initials otherwise. -->
-    <FrameLayout
-        android:layout_width="112dp"
-        android:layout_height="112dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="28dp">
+        <!-- Photo when the contact has one, initials otherwise. -->
+        <FrameLayout
+            android:id="@+id/call_avatar"
+            android:layout_width="112dp"
+            android:layout_height="112dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp">
+
+            <TextView
+                android:id="@+id/call_initials"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_circle_avatar"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="40sp"/>
+
+            <ImageView
+                android:id="@+id/call_photo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                android:contentDescription="@null"/>
+        </FrameLayout>
 
         <TextView
-            android:id="@+id/call_initials"
+            android:id="@+id/call_name"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/bg_circle_avatar"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:gravity="center"
             android:textColor="#FFFFFF"
-            android:textSize="40sp"/>
+            android:textSize="30sp"
+            android:maxLines="2"
+            android:ellipsize="end"/>
 
-        <ImageView
-            android:id="@+id/call_photo"
+        <TextView
+            android:id="@+id/call_number"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:visibility="gone"
-            android:contentDescription="@null"/>
-    </FrameLayout>
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:textColor="#90A4AE"
+            android:textSize="16sp"/>
 
-    <TextView
-        android:id="@+id/call_name"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:gravity="center"
-        android:textColor="#FFFFFF"
-        android:textSize="32sp"
-        android:maxLines="2"
-        android:ellipsize="end"/>
-
-    <TextView
-        android:id="@+id/call_number"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center"
-        android:textColor="#90A4AE"
-        android:textSize="16sp"/>
-
-    <Chronometer
-        android:id="@+id/call_timer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:gravity="center"
-        android:textColor="#B0BEC5"
-        android:textSize="18sp"
-        android:visibility="gone"/>
-
+        <Chronometer
+            android:id="@+id/call_timer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="#B0BEC5"
+            android:textSize="18sp"
+            android:visibility="gone"/>
     </LinearLayout>
 
     <!-- A real 3x4 pad, shown in place of the header. Tones for phone
@@ -141,13 +223,66 @@
         android:layout_height="0dp"
         android:layout_weight="1"/>
 
+    <!-- Hold, swap or merge, and video. Each hides itself unless the call
+         says it can do it, so nothing here is ever a dead button. -->
+    <LinearLayout
+        android:id="@+id/call_controls_extra"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="24dp"
+        android:visibility="gone">
+
+        <LinearLayout android:id="@+id/call_hold_column" style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_hold"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_pause"
+                android:contentDescription="Hold"/>
+            <TextView android:id="@+id/call_hold_label"
+                style="@style/CallControlLabel"
+                android:text="Hold"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/call_merge_column" style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_merge"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_call_merge"
+                android:contentDescription="Merge calls"/>
+            <TextView style="@style/CallControlLabel"
+                android:text="Merge"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/call_swap_column" style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_swap"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_swap_calls"
+                android:contentDescription="Swap calls"/>
+            <TextView style="@style/CallControlLabel"
+                android:text="Swap"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/call_video_column" style="@style/CallControlColumn">
+            <ImageButton
+                android:id="@+id/call_video"
+                style="@style/CallControlButton"
+                android:src="@drawable/ic_videocam"
+                android:contentDescription="Video"/>
+            <TextView android:id="@+id/call_video_label"
+                style="@style/CallControlLabel"
+                android:text="Video"/>
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- Mute, keypad and speaker, once there is a call to apply them to. -->
     <LinearLayout
         android:id="@+id/call_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="40dp">
+        android:layout_marginBottom="36dp">
 
         <LinearLayout style="@style/CallControlColumn">
             <ImageButton
@@ -237,4 +372,5 @@
         </LinearLayout>
     </LinearLayout>
 
-</LinearLayout>
+    </LinearLayout>
+</FrameLayout>
