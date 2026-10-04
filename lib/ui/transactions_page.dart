@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
 import 'delete_transaction.dart';
+import 'receipt_import_page.dart';
 import 'transaction_edit_page.dart';
 
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
@@ -48,6 +50,40 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
           (t.smsSender ?? '').toLowerCase().contains(q) ||
           t.amount.toStringAsFixed(2).contains(q);
     }).toList();
+  }
+
+  /// Reads a payment receipt — the screenshot a UPI app shares — and fills
+  /// the form from it. This is the way in for a payment whose bank SMS
+  /// never arrived. Asked here rather than on the next page so cancelling
+  /// costs nothing.
+  Future<void> _fromReceipt() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pick a receipt screenshot'),
+              subtitle: const Text(
+                  'Or share one straight from your payment app'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Photograph a receipt'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ReceiptImportPage(source: source)),
+    );
   }
 
   @override
@@ -130,8 +166,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   return const _EmptyState(
                     icon: Icons.receipt_long,
                     title: 'No transactions yet',
-                    subtitle: 'Bank SMS are parsed automatically, or add one '
-                        'by hand with the button below.',
+                    subtitle: 'Bank SMS are parsed automatically. You can '
+                        'also share a payment receipt in from a UPI app, or '
+                        'add one by hand.',
                   );
                 }
                 final list = _apply(all);
@@ -197,12 +234,27 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TransactionEditPage()),
-        ),
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'receipt',
+            tooltip: 'Read a payment receipt',
+            onPressed: _fromReceipt,
+            child: const Icon(Icons.receipt_outlined),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'add',
+            tooltip: 'Add by hand',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TransactionEditPage()),
+            ),
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }

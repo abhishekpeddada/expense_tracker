@@ -253,6 +253,42 @@ class AppDb extends _$AppDb {
     return (await q.get()).isNotEmpty;
   }
 
+  /// A transaction that looks like the payment on a receipt being
+  /// imported, or null.
+  ///
+  /// A receipt is shared because no SMS arrived — but one sometimes turns
+  /// up late, and the same receipt can be shared twice, so this is what
+  /// stops the same payment being counted as two. The UPI reference is the
+  /// reliable signal; amount and time are the fallback for receipts that
+  /// do not show one.
+  Future<Transaction?> findReceiptDuplicate({
+    required double amount,
+    required DateTime at,
+    String? reference,
+  }) async {
+    // Long enough to be a real reference, and digits and letters only:
+    // anything else would be read as a LIKE wildcard.
+    if (reference != null &&
+        reference.length >= 6 &&
+        RegExp(r'^[A-Za-z0-9]+$').hasMatch(reference)) {
+      final byRef = await (select(transactions)
+            ..where((t) => t.note.like('%$reference%'))
+            ..limit(1))
+          .getSingleOrNull();
+      if (byRef != null) return byRef;
+    }
+    final from = at.subtract(const Duration(hours: 36));
+    final to = at.add(const Duration(hours: 36));
+    return (select(transactions)
+          ..where((t) =>
+              t.amount.equals(amount) &
+              t.occurredAt.isBiggerOrEqualValue(from) &
+              t.occurredAt.isSmallerOrEqualValue(to))
+          ..orderBy([(t) => OrderingTerm.desc(t.occurredAt)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
   /// Applies a category picked on the notification to the transaction that
   /// came from that SMS entry. Only fills in uncategorized transactions —
   /// a category the user already set in-app must never be overwritten by a

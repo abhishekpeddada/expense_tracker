@@ -63,6 +63,14 @@
                 <data android:scheme="mms"/>
                 <data android:scheme="mmsto"/>
             </intent-filter>
+            <!-- Shared payment receipts. A UPI app's "share" produces an
+                 image; this is how it reaches us when no bank SMS does. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
+
             <!-- Default-phone-app requirement: be offerable as the dialer.
                  DIAL with and without a number are both required; the
                  CALL_BUTTON filter is the hardware/assistant call key. -->

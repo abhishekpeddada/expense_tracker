@@ -2,6 +2,9 @@ package com.abhishek.expense_tracker
 
 import android.Manifest
 import android.app.NotificationManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,6 +31,9 @@ class MainActivity : FlutterActivity() {
         private const val REQ_DIALER_ROLE = 1003
         private const val REQ_PHONE_PERMS = 1004
 
+        /** Plenty to read an amount off a receipt, small enough to send. */
+        private const val MAX_IMAGE_EDGE = 1280
+
         // Set while a Flutter engine is attached, so broadcast receivers can
         // nudge the UI to drain the queue. Main-thread only.
         private var channel: MethodChannel? = null
@@ -39,6 +45,24 @@ class MainActivity : FlutterActivity() {
 
     private var pendingRoleResult: MethodChannel.Result? = null
     private var pendingDialerResult: MethodChannel.Result? = null
+
+    /** A receipt image shared in, waiting to be collected. */
+    private var sharedImage: Uri? = null
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        rememberSharedImage(intent)
+    }
+
+    /** A share arriving while the app is already open comes through here. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        rememberSharedImage(intent)
+        if (sharedImage != null) {
+            runCatching { channel?.invokeMethod("sharedImage", null) }
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -142,6 +166,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "getVoicemail" -> result.success(voicemailInfo())
+                "takeSharedImage" -> result.success(takeSharedImage())
                 "getContacts" -> result.success(readContacts())
                 "addContact" -> {
                     val number = call.argument<String>("number")
@@ -272,6 +297,87 @@ class MainActivity : FlutterActivity() {
         val rm = getSystemService(RoleManager::class.java)
         return rm.isRoleHeld(RoleManager.ROLE_SMS) ||
             Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    }
+
+    /**
+     * An image shared into this app, handed over once and then forgotten.
+     *
+     * Downscaled here rather than on the Flutter side: a screenshot off a
+     * modern phone is several megabytes, and what reads a receipt only
+     * needs enough pixels to see the numbers.
+     */
+    private fun takeSharedImage(): ByteArray? {
+        val uri = sharedImage ?: return null
+        sharedImage = null
+        return try {
+            // Measured before it is decoded: a full-resolution screenshot
+            // off a modern phone is big enough to be worth never holding
+            // in memory in the first place.
+            val bounds = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            // decodeStream returns null when it is only measuring, so the
+            // stream is opened separately rather than tested for null here.
+            val measuring = contentResolver.openInputStream(uri) ?: return null
+            measuring.use { BitmapFactory.decodeStream(it, null, bounds) }
+
+            val longest = maxOf(bounds.outWidth, bounds.outHeight)
+            if (longest <= 0) return null
+            var sample = 1
+            while (longest / (sample * 2) >= MAX_IMAGE_EDGE) sample *= 2
+
+            val decoded = contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(
+                    it,
+                    null,
+                    BitmapFactory.Options().apply { inSampleSize = sample },
+                )
+            } ?: return null
+
+            // Sampling only halves, so one more exact step brings the long
+            // edge down to the budget.
+            val longestNow = maxOf(decoded.width, decoded.height)
+            val scaled = if (longestNow <= MAX_IMAGE_EDGE) decoded else {
+                val factor = MAX_IMAGE_EDGE.toFloat() / longestNow
+                Bitmap.createScaledBitmap(
+                    decoded,
+                    (decoded.width * factor).toInt().coerceAtLeast(1),
+                    (decoded.height * factor).toInt().coerceAtLeast(1),
+                    true,
+                )
+            }
+            ByteArrayOutputStream().use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                out.toByteArray()
+            }
+        } catch (e: Throwable) {
+            // A shared image is whatever another app handed over: it may be
+            // gone, unreadable, or too big to decode. None of that should
+            // take the app down - the person can pick a file instead.
+            null
+        }
+    }
+
+    /**
+     * Remembers a receipt shared into the app until Flutter asks for it.
+     *
+     * EXTRA_STREAM is where a well-behaved share puts the image, but not
+     * every app is well behaved, so the clip data and the intent's own
+     * data are tried as well.
+     */
+    private fun rememberSharedImage(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND) return
+        if (intent.type?.startsWith("image/") != true) return
+        @Suppress("DEPRECATION")
+        val extra = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        }
+        val uri = extra
+            ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
+            ?: intent.data
+        if (uri != null) sharedImage = uri
     }
 
     private fun isDefaultDialer(): Boolean {

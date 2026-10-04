@@ -17,10 +17,18 @@ class SmsService {
   final AppDb _db;
   static const _channel = MethodChannel('expense_tracker/sms');
 
+  /// Called when an image is shared into the app while it is already
+  /// running. Only one handler can own the channel, so the shell hangs its
+  /// receipt handling here rather than taking it over.
+  VoidCallback? onSharedImage;
+
   void init() {
     _channel.setMethodCallHandler((call) async {
-      if (call.method == 'smsPing') {
-        await drainQueue();
+      switch (call.method) {
+        case 'smsPing':
+          await drainQueue();
+        case 'sharedImage':
+          onSharedImage?.call();
       }
     });
   }

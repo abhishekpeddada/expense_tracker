@@ -8,12 +8,14 @@ import 'services/self_transfer.dart';
 import 'services/settings_service.dart';
 import 'services/sms_service.dart';
 import 'services/chat_service.dart';
+import 'services/receipt_import.dart';
 import 'ui/accounts_page.dart';
 import 'ui/chat_page.dart';
 import 'ui/diagnostics_page.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/food_page.dart';
 import 'ui/inbox_page.dart';
+import 'ui/receipt_import_page.dart';
 import 'ui/settings_page.dart';
 import 'ui/transactions_page.dart';
 
@@ -88,17 +90,47 @@ class _HomeShellState extends ConsumerState<HomeShell>
   /// Index of the Chat tab, which brings its own app-bar actions.
   static const _chatIndex = 3;
 
+  /// Guards against opening two receipt screens when a share arrives at the
+  /// same moment as a resume.
+  bool _readingReceipt = false;
+
+  /// Held rather than read back out of [ref] later: the shell is torn down
+  /// with the app, by which point reading a provider is no longer allowed.
+  late final SmsService _sms;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final sms = ref.read(smsServiceProvider);
-    sms.requestPermissions();
-    sms.drainQueue();
+    _sms = ref.read(smsServiceProvider);
+    _sms.requestPermissions();
+    _sms.drainQueue();
+    _sms.onSharedImage = _openSharedReceipt;
     // Only meaningful once the dialer role is held; harmless before then,
     // and the call log needs the permission either way.
     ref.read(phoneServiceProvider).requestPermissions();
     _catchUp();
+    // After the first frame, so there is a Navigator to push onto.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _openSharedReceipt());
+  }
+
+  /// Picks up an image shared in from a payment app. The native side holds
+  /// it until it is collected, so this works whether the share launched the
+  /// app cold or landed on it already running.
+  Future<void> _openSharedReceipt() async {
+    if (_readingReceipt) return;
+    _readingReceipt = true;
+    try {
+      final image = await ref.read(receiptImportProvider).takeShared();
+      if (image == null || !mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ReceiptImportPage(image: image)),
+      );
+    } finally {
+      _readingReceipt = false;
+    }
   }
 
   /// Housekeeping that runs whenever the app comes to the front: pair up
@@ -112,6 +144,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   void dispose() {
+    _sms.onSharedImage = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -122,6 +155,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
       ref.read(smsServiceProvider).drainQueue();
       ref.invalidate(isDefaultSmsAppProvider);
       _catchUp();
+      _openSharedReceipt();
     }
   }
 

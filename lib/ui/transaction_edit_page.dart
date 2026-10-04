@@ -104,7 +104,9 @@ class _TransactionEditPageState extends ConsumerState<TransactionEditPage> {
         rawSms: Value(from?.rawSms),
         smsSender: Value(from?.smsSender),
         balance: Value(from?.balance),
-        source: Value(from == null ? 'manual' : 'sms'),
+        // The draft knows where it came from - a message, a receipt -
+        // and that is worth keeping for anyone auditing later.
+        source: Value(from?.source ?? 'manual'),
         occurredAt: _when,
       ));
     }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../models/models.dart';
 import '../nutrition/nutrition.dart';
 
 /// A model offered by OpenRouter. Prices are USD per token, as the API
@@ -93,6 +94,35 @@ class ChatTurn {
 
   const ChatTurn.user(this.content) : role = 'user';
   const ChatTurn.assistant(this.content) : role = 'assistant';
+}
+
+/// What a payment receipt turned out to say.
+class ReceiptReading {
+  final double amount;
+  final TxnType type;
+  final String? merchant;
+
+  /// When the receipt says the payment happened. Null when it shows no
+  /// date, in which case the caller decides what to use instead.
+  final DateTime? occurredAt;
+  final String? bank;
+  final String? accountTail;
+
+  /// The UPI reference, kept in the note so the payment can be matched
+  /// against a bank statement later.
+  final String? reference;
+  final String? note;
+
+  const ReceiptReading({
+    required this.amount,
+    required this.type,
+    this.merchant,
+    this.occurredAt,
+    this.bank,
+    this.accountTail,
+    this.reference,
+    this.note,
+  });
 }
 
 class OpenRouterException implements Exception {
@@ -190,6 +220,59 @@ class OpenRouterClient {
       throw OpenRouterException('Could not reach OpenRouter: $e');
     }
     return parseCompletion(res.statusCode, res.body).trim();
+  }
+
+  /// Reads a UPI payment receipt - the image a payment app produces when
+  /// you share a transaction - and pulls the payment out of it.
+  ///
+  /// This is the way in when no SMS arrives. Some banks do not alert on
+  /// small UPI debits at all, and the receipt is the only record the
+  /// person has.
+  Future<ReceiptReading> readReceipt(Uint8List jpeg) async {
+    try {
+      return await _receiptOnce(jpeg, maxTokens: _photoTokens);
+    } on OpenRouterException catch (e) {
+      if (!e.truncated) rethrow;
+      return _receiptOnce(jpeg, maxTokens: _photoTokens * 3);
+    }
+  }
+
+  Future<ReceiptReading> _receiptOnce(
+    Uint8List jpeg, {
+    required int maxTokens,
+  }) async {
+    late final http.Response res;
+    try {
+      res = await _http.post(
+        Uri.parse('$_base/chat/completions'),
+        headers: _headers,
+        body: jsonEncode({
+          'model': model,
+          'temperature': 0.1,
+          'max_tokens': maxTokens,
+          'reasoning': {'enabled': false},
+          'messages': [
+            {'role': 'system', 'content': receiptSystemPrompt},
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'text', 'text': 'Read this payment receipt.'},
+                {
+                  'type': 'image_url',
+                  'image_url': {
+                    'url': 'data:image/jpeg;base64,${base64Encode(jpeg)}',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    } catch (e) {
+      throw OpenRouterException('Could not reach OpenRouter: $e');
+    }
+    final content = parseCompletion(res.statusCode, res.body);
+    return parseReceipt(content);
   }
 
   /// Asks the chosen model for the nutrition of one serving of [food].
@@ -353,6 +436,72 @@ class OpenRouterClient {
       'most 15 words) for anything you had to assume or could not see. If '
       'the photo has no food in it, reply {"items": []}. Answer immediately '
       'with the JSON object; do not think it through first.';
+
+  static const receiptSystemPrompt =
+      'You read screenshots of payment receipts from Indian UPI apps '
+      '(Google Pay, PhonePe, Paytm, BHIM, bank apps) and extract the '
+      'payment. Reply with ONLY a JSON object, no prose and no code '
+      'fences, with these keys: amount (number, rupees, digits only), '
+      'direction (string, "debit" when the person paid out, "credit" when '
+      'they received), merchant (string, who was paid or who paid - the '
+      'name shown, not the UPI id, and not the account holder viewing the '
+      'receipt), occurred_at (string, ISO 8601 like 2026-10-04T14:30:00 '
+      'from the date and time on the receipt, omit if absent), bank '
+      '(string, the bank name if one is shown), account_tail (string, the '
+      'last 4 digits of the account or card if shown), reference (string, '
+      'the UPI transaction or reference id if shown), note (string, at '
+      'most 12 words, anything uncertain). Omit any key you cannot read '
+      'rather than guessing. If the image is not a payment receipt, reply '
+      '{"not_a_receipt": true}. Answer immediately with the JSON object; '
+      'do not think it through first.';
+
+  /// Reads what a vision model made of a payment receipt.
+  static ReceiptReading parseReceipt(String content) {
+    final json = _extractJson(content);
+    if (json == null) {
+      throw const OpenRouterException(
+          'Could not read the model\'s answer as a payment.');
+    }
+    if (json['not_a_receipt'] == true) {
+      throw const OpenRouterException(
+          'That image does not look like a payment receipt.');
+    }
+
+    double? number(Object? v) {
+      if (v is num) return v.toDouble();
+      if (v is String) {
+        // Receipts write amounts as "₹1,234.00"; the symbol, the commas
+        // and any trailing text are not part of the number.
+        final cleaned = v.replaceAll(RegExp(r'[^0-9.]'), '');
+        return double.tryParse(cleaned);
+      }
+      return null;
+    }
+
+    final amount = number(json['amount']);
+    if (amount == null || amount <= 0) {
+      throw const OpenRouterException(
+          'No amount could be read from that receipt.');
+    }
+
+    final direction = _string(json['direction'])?.toLowerCase();
+    return ReceiptReading(
+      amount: amount,
+      type: direction == 'credit' ? TxnType.credit : TxnType.debit,
+      merchant: _string(json['merchant']),
+      occurredAt: _dateTime(json['occurred_at']),
+      bank: _string(json['bank']),
+      accountTail: _string(json['account_tail']),
+      reference: _string(json['reference']),
+      note: _string(json['note']),
+    );
+  }
+
+  static DateTime? _dateTime(Object? v) {
+    final s = _string(v);
+    if (s == null) return null;
+    return DateTime.tryParse(s);
+  }
 
   /// Reads the item list a vision model returns for a photo.
   static List<NutritionEstimate> parsePhotoEstimate(String content,
