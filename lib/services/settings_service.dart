@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'card_cycle.dart';
 import 'openrouter.dart';
 
 /// User-configurable settings, stored on the device only.
@@ -29,6 +30,13 @@ class AppSettings {
   /// Force the pitch-black (AMOLED) dark theme instead of following system.
   final bool pitchBlack;
 
+  /// Day of the month the credit card statement closes. Zero bills the
+  /// card by calendar month instead.
+  final int cardStatementDay;
+
+  /// Day of the month the card bill is paid.
+  final int cardDueDay;
+
   const AppSettings({
     this.openRouterKey = '',
     this.openRouterModel = OpenRouterClient.defaultModel,
@@ -36,9 +44,15 @@ class AppSettings {
     this.modelAcceptsImages,
     this.voicemailNumber = '',
     this.pitchBlack = false,
+    this.cardStatementDay = 25,
+    this.cardDueDay = 15,
   });
 
   bool get hasKey => openRouterKey.trim().isNotEmpty;
+
+  /// How card spending is divided into bills.
+  CardCycle get cardCycle =>
+      CardCycle(closingDay: cardStatementDay, dueDay: cardDueDay);
 
   AppSettings copyWith({
     String? openRouterKey,
@@ -48,6 +62,8 @@ class AppSettings {
     bool clearModelAcceptsImages = false,
     String? voicemailNumber,
     bool? pitchBlack,
+    int? cardStatementDay,
+    int? cardDueDay,
   }) =>
       AppSettings(
         openRouterKey: openRouterKey ?? this.openRouterKey,
@@ -58,6 +74,8 @@ class AppSettings {
             : (modelAcceptsImages ?? this.modelAcceptsImages),
         voicemailNumber: voicemailNumber ?? this.voicemailNumber,
         pitchBlack: pitchBlack ?? this.pitchBlack,
+        cardStatementDay: cardStatementDay ?? this.cardStatementDay,
+        cardDueDay: cardDueDay ?? this.cardDueDay,
       );
 }
 
@@ -71,6 +89,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   /// Kept under its original name so the existing preference carries over.
   static const _keyPitchBlack = 'pitchBlack';
+
+  static const _keyStatementDay = 'card.statementDay';
+  static const _keyDueDay = 'card.dueDay';
 
   static SharedPreferences? _prefs;
 
@@ -89,6 +110,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
         modelAcceptsImages: _prefs?.getBool(_keyVision),
         voicemailNumber: _prefs?.getString(_keyVoicemail) ?? '',
         pitchBlack: _prefs?.getBool(_keyPitchBlack) ?? false,
+        cardStatementDay: _prefs?.getInt(_keyStatementDay) ?? 25,
+        cardDueDay: _prefs?.getInt(_keyDueDay) ?? 15,
       );
 
   void setApiKey(String value) {
@@ -122,6 +145,20 @@ class SettingsNotifier extends Notifier<AppSettings> {
     final number = value.trim();
     state = state.copyWith(voicemailNumber: number);
     _prefs?.setString(_keyVoicemail, number);
+  }
+
+  /// [day] is the day of the month the statement closes, or zero to bill
+  /// the card by calendar month.
+  void setCardStatementDay(int day) {
+    final value = day < 0 ? 0 : (day > CardCycle.maxDay ? 0 : day);
+    state = state.copyWith(cardStatementDay: value);
+    _prefs?.setInt(_keyStatementDay, value);
+  }
+
+  void setCardDueDay(int day) {
+    final value = day.clamp(1, CardCycle.maxDay);
+    state = state.copyWith(cardDueDay: value);
+    _prefs?.setInt(_keyDueDay, value);
   }
 
   void togglePitchBlack() {

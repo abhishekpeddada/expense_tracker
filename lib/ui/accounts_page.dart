@@ -10,6 +10,8 @@ import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
 import '../parsing/statement_csv.dart';
+import '../services/card_cycle.dart';
+import '../services/settings_service.dart';
 import 'transactions_page.dart' show TransactionTile;
 
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
@@ -24,6 +26,9 @@ class AccountsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(accountsProvider);
     final now = DateTime.now();
+    // A card is billed in statement periods, so its spend-so-far is
+    // counted over the open period rather than the calendar month.
+    final cycle = ref.watch(settingsProvider).cardCycle.current;
 
     return Scaffold(
       body: accounts.isEmpty
@@ -53,7 +58,7 @@ class AccountsPage extends ConsumerWidget {
               padding: const EdgeInsets.all(12),
               children: [
                 for (final a in accounts)
-                  _AccountCard(account: a, now: now),
+                  _AccountCard(account: a, now: now, cardCycle: cycle),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -68,20 +73,29 @@ class AccountsPage extends ConsumerWidget {
 class _AccountCard extends StatelessWidget {
   final DerivedAccount account;
   final DateTime now;
-  const _AccountCard({required this.account, required this.now});
+
+  /// The statement period open now, used instead of the calendar month for
+  /// a credit card.
+  final StatementCycle cardCycle;
+
+  const _AccountCard({
+    required this.account,
+    required this.now,
+    required this.cardCycle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final a = account;
     final isCard = a.kind == AccountKind.creditCard;
-    double monthSpend = 0;
+    double periodSpend = 0;
     for (final t in a.transactions) {
-      if (t.type == TxnType.debit &&
-          !Categories.isInternal(t.category) &&
-          t.occurredAt.year == now.year &&
-          t.occurredAt.month == now.month) {
-        monthSpend += t.amount;
-      }
+      if (t.type != TxnType.debit) continue;
+      if (Categories.isInternal(t.category)) continue;
+      final inPeriod = isCard
+          ? cardCycle.contains(t.occurredAt)
+          : t.occurredAt.year == now.year && t.occurredAt.month == now.month;
+      if (inPeriod) periodSpend += t.amount;
     }
 
     return Card(
@@ -105,8 +119,14 @@ class _AccountCard extends StatelessWidget {
                 ' · as of ${_dateFmt.format(a.balanceAsOf!)}',
               ),
             Text(
-                'This month: ${_rupee.format(monthSpend)} spent · '
+                '${isCard ? 'This statement' : 'This month'}: '
+                '${_rupee.format(periodSpend)} spent · '
                 '${a.transactions.length} transactions'),
+            if (isCard)
+              Text(
+                '${cardCycle.label} · due ${cardCycle.dueLabel}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
           ],
         ),
         trailing: const Icon(Icons.chevron_right),

@@ -18,6 +18,16 @@ final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 class TxnFilter {
   /// The month the figure covered, or null for all time.
   final DateTime? month;
+
+  /// An explicit window instead of a calendar month, for a figure that
+  /// does not line up with one — a credit card statement period. [from] is
+  /// inclusive, [toExclusive] is not, and setting either ignores [month].
+  final DateTime? from;
+  final DateTime? toExclusive;
+
+  /// What to call that window in the heading.
+  final String? periodLabel;
+
   final TxnType? type;
   final bool creditCardOnly;
 
@@ -38,6 +48,9 @@ class TxnFilter {
 
   const TxnFilter({
     this.month,
+    this.from,
+    this.toExclusive,
+    this.periodLabel,
     this.type,
     this.creditCardOnly = false,
     this.category,
@@ -46,8 +59,15 @@ class TxnFilter {
     this.onlyInternal = false,
   });
 
+  bool get hasWindow => from != null || toExclusive != null;
+
   bool matches(Transaction t) {
-    if (month != null &&
+    if (hasWindow) {
+      if (from != null && t.occurredAt.isBefore(from!)) return false;
+      if (toExclusive != null && !t.occurredAt.isBefore(toExclusive!)) {
+        return false;
+      }
+    } else if (month != null &&
         (t.occurredAt.year != month!.year ||
             t.occurredAt.month != month!.month)) {
       return false;
@@ -82,9 +102,10 @@ class TransactionListPage extends ConsumerWidget {
     final list = [for (final t in all) if (filter.matches(t)) t];
     final total = list.fold<double>(0, (sum, t) => sum + t.amount);
 
-    final period = filter.month == null
-        ? 'All time'
-        : DateFormat('MMMM yyyy').format(filter.month!);
+    final period = filter.periodLabel ??
+        (filter.month == null
+            ? 'All time'
+            : DateFormat('MMMM yyyy').format(filter.month!));
 
     return Scaffold(
       appBar: AppBar(

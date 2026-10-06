@@ -1,6 +1,7 @@
 import '../data/db.dart';
 import '../data/providers.dart' show DerivedAccount;
 import '../models/models.dart';
+import 'card_cycle.dart';
 import 'insights.dart';
 
 /// Builds the briefing the chat model is given: a compact, plain-text
@@ -24,6 +25,7 @@ class ChatContext {
     required List<Budget> budgets,
     required List<FoodEntry> food,
     required List<DerivedAccount> accounts,
+    CardCycle cardCycle = const CardCycle(),
     DateTime? now,
   }) {
     final today = now ?? DateTime.now();
@@ -36,6 +38,7 @@ class ChatContext {
 
     _accounts(b, accounts);
     _thisMonth(b, transactions, today);
+    _cardStatement(b, transactions, cardCycle, today);
     _months(b, transactions, today);
     _budgets(b, budgets, transactions, today);
     _recurring(b, transactions);
@@ -128,6 +131,41 @@ diet, or give medical advice.''';
         b.writeln('  ${c.key}: ${_money(c.value)} ($share%)');
       }
     }
+    b.writeln();
+  }
+
+  /// Card spending over the open statement period.
+  ///
+  /// A card is billed in statement periods, not calendar months, so a
+  /// question about "this month on the card" is really about the period.
+  /// Without this the model would have to add up the recent rows itself
+  /// and would quietly get the boundary wrong.
+  static void _cardStatement(StringBuffer b, List<Transaction> all,
+      CardCycle cycle, DateTime today) {
+    final open = cycle.covering(today);
+    final closed = cycle.closingIn(
+        DateTime(open.close.year, open.close.month - 1));
+
+    double spendIn(StatementCycle period) => all
+        .where((t) =>
+            t.type == TxnType.debit &&
+            t.accountKind == AccountKind.creditCard &&
+            !Categories.isInternal(t.category) &&
+            period.contains(t.occurredAt))
+        .fold(0.0, (sum, t) => sum + t.amount);
+
+    final openSpend = spendIn(open);
+    final closedSpend = spendIn(closed);
+    if (openSpend == 0 && closedSpend == 0) return;
+
+    b.writeln('== DATA: CREDIT CARD STATEMENT PERIODS ==');
+    b.writeln('A card spend belongs to the statement period it falls in, '
+        'not the calendar month.');
+    b.writeln('Open period ${_date(open.start)} to ${_date(open.close)}: '
+        '${_money(openSpend)} spent so far. Bill due ${_date(open.due)}.');
+    b.writeln('Previous period ${_date(closed.start)} to '
+        '${_date(closed.close)}: ${_money(closedSpend)}. Bill due '
+        '${_date(closed.due)}.');
     b.writeln();
   }
 

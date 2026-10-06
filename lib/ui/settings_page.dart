@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/card_cycle.dart';
 import '../services/openrouter.dart';
 import '../services/phone_service.dart';
 import '../services/settings_service.dart';
@@ -242,6 +243,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ref.read(settingsProvider.notifier).setAutoEstimate(v),
           ),
           const Divider(height: 32),
+          const _SectionHeader('Credit card'),
+          const _CardCycleSettings(),
+          const Divider(height: 32),
           const _SectionHeader('Phone'),
           const _DialerRole(),
           const _FullScreenCalls(),
@@ -281,6 +285,167 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// When the card statement closes, and when its bill is paid.
+///
+/// Card spending is billed in statement periods, not calendar months: a
+/// purchase on the 28th is on next month's bill. Without these two days
+/// the dashboard has to guess, and guessing splits one bill across two
+/// months so neither figure matches the statement.
+class _CardCycleSettings extends ConsumerWidget {
+  const _CardCycleSettings();
+
+  static String _ordinal(int day) {
+    if (day >= 11 && day <= 13) return '${day}th';
+    return switch (day % 10) {
+      1 => '${day}st',
+      2 => '${day}nd',
+      3 => '${day}rd',
+      _ => '${day}th',
+    };
+  }
+
+  Future<void> _pickDay(
+    BuildContext context, {
+    required String title,
+    required String? monthlyOption,
+    required int selected,
+    required ValueChanged<int> onPicked,
+  }) async {
+    final day = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+          title: Text(title),
+          // Scrollable so the grid still reaches its last row in
+          // landscape, where the dialog has little height to work with.
+          content: SingleChildScrollView(
+            child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // A calendar-shaped grid rather than a list of 28 rows: the
+              // day being picked is a date, and this way it is all on
+              // screen at once.
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  // 28 is the last day every month has. Past it the
+                  // boundary would move around, so a card billed later is
+                  // treated as calendar-month billed instead.
+                  for (var d = 1; d <= CardCycle.maxDay; d++)
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Material(
+                        color: d == selected
+                            ? scheme.primary
+                            : scheme.surfaceContainerHighest,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => Navigator.pop(context, d),
+                          child: Center(
+                            child: Text(
+                              '$d',
+                              style: TextStyle(
+                                color: d == selected
+                                    ? scheme.onPrimary
+                                    : scheme.onSurfaceVariant,
+                                fontWeight: d == selected
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (monthlyOption != null) ...[
+                const SizedBox(height: 8),
+                if (selected == 0)
+                  FilledButton.tonal(
+                    onPressed: () => Navigator.pop(context, 0),
+                    child: Text(monthlyOption),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 0),
+                    child: Text(monthlyOption),
+                  ),
+              ],
+            ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL'),
+            ),
+          ],
+        );
+      },
+    );
+    if (day != null) onPicked(day);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+    final cycle = settings.cardCycle;
+    final current = cycle.current;
+
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.event_available_outlined),
+          title: const Text('Statement closes'),
+          subtitle: Text(cycle.isCalendarMonth
+              ? 'On the last day of the month'
+              : 'On the ${_ordinal(settings.cardStatementDay)} of every '
+                  'month'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _pickDay(
+            context,
+            title: 'Statement closes on',
+            monthlyOption: 'Last day of the month',
+            selected: settings.cardStatementDay,
+            onPicked: notifier.setCardStatementDay,
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.payments_outlined),
+          title: const Text('Bill paid'),
+          subtitle:
+              Text('On the ${_ordinal(settings.cardDueDay)} after the '
+                  'statement closes'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _pickDay(
+            context,
+            title: 'Bill paid on',
+            monthlyOption: null,
+            selected: settings.cardDueDay,
+            onPicked: notifier.setCardDueDay,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            'Card spending on the dashboard is counted over the statement '
+            'period, not the calendar month. The period open now is '
+            '${current.label}, and its bill is due ${current.dueLabel}.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 }

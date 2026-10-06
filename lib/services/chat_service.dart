@@ -38,6 +38,7 @@ class ChatService {
       budgets: budgets,
       food: food,
       accounts: accounts,
+      cardCycle: _ref.read(settingsProvider).cardCycle,
     );
   }
 

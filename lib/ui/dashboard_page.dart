@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import '../data/db.dart';
 import '../data/providers.dart';
 import '../models/models.dart';
+import '../services/card_cycle.dart';
 import '../services/insights.dart';
+import '../services/settings_service.dart';
 import 'budgets_page.dart';
 import 'self_transfers_page.dart';
 import 'transaction_list_page.dart';
@@ -72,7 +74,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         // Null means all time, which is what the drill-down filter expects.
         final month = _allTime ? null : selected;
 
-        double spent = 0, received = 0, ccSpent = 0, internal = 0;
+        double spent = 0, received = 0, internal = 0;
         final byCategory = <String, double>{};
         for (final t in monthTxns) {
           // Self transfers and credit card bill payments move money between
@@ -84,12 +86,26 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           }
           if (t.type == TxnType.debit) {
             spent += t.amount;
-            if (t.accountKind == AccountKind.creditCard) ccSpent += t.amount;
             final c = t.category ?? 'Uncategorized';
             byCategory[c] = (byCategory[c] ?? 0) + t.amount;
           } else {
             received += t.amount;
           }
+        }
+
+        // A card spend belongs to whichever statement was open when it
+        // happened, not to the calendar month it happened in, so this
+        // figure is counted over the period rather than the month.
+        final cycle = _allTime
+            ? null
+            : ref.watch(settingsProvider).cardCycle.closingIn(selected!);
+        double ccSpent = 0;
+        for (final t in list) {
+          if (t.type != TxnType.debit) continue;
+          if (t.accountKind != AccountKind.creditCard) continue;
+          if (Categories.isInternal(t.category)) continue;
+          if (cycle != null && !cycle.contains(t.occurredAt)) continue;
+          ccSpent += t.amount;
         }
 
         return ListView(
@@ -156,6 +172,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
             const SizedBox(height: 12),
             _StatCard(
+              // The period is spelled out in the note underneath rather
+              // than crammed into the label.
               label: 'Credit card spends',
               value: _rupee.format(ccSpent),
               color: Colors.deepPurple,
@@ -166,11 +184,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 'Credit card spends',
                 TxnFilter(
                   month: month,
+                  from: cycle?.start,
+                  toExclusive: cycle?.endExclusive,
+                  periodLabel: cycle?.label,
                   type: TxnType.debit,
                   creditCardOnly: true,
                 ),
               ),
             ),
+            if (cycle != null) _CycleNote(cycle: cycle),
             if (internal > 0)
               InkWell(
                 onTap: () => _open(
@@ -252,6 +274,47 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Says plainly which window the card figure covers and when the bill for
+/// it is due, because "credit card spends" over a statement period is not
+/// the same number as over a calendar month and the difference is only
+/// obvious once it is spelled out.
+class _CycleNote extends StatelessWidget {
+  final StatementCycle cycle;
+
+  const _CycleNote({required this.cycle});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final String when;
+    if (cycle.isOpen) {
+      when = 'still open, bill due ${cycle.dueLabel}';
+    } else if (cycle.due.isAfter(now)) {
+      when = 'closed, bill due ${cycle.dueLabel}';
+    } else {
+      when = 'closed, bill was due ${cycle.dueLabel}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(Icons.event_outlined,
+              size: 16, color: theme.colorScheme.outline),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Statement period ${cycle.label} - $when.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -705,7 +768,14 @@ class _StatCard extends StatelessWidget {
                   Icon(icon, size: 18, color: color),
                   const SizedBox(width: 6),
                 ],
-                Text(label, style: Theme.of(context).textTheme.bodySmall),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
